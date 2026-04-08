@@ -6,3 +6,5 @@ sibeliaz:
 
 filtering:
   min_len: 450
+
+te_lib: tests/data/TE_lib/trep-db_complete_Rel-19.fasta

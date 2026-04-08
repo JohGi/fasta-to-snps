@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Rename a single-sequence FASTA header with a given string and write to stdout.
+# Rename the header of a single-sequence FASTA and write the result to an output file.
 
 usage() {
   cat <<'EOF'
 Usage:
-  rename_fasta_header.sh --fasta INPUT.fasta --name NAME
+  rename_fasta_header.sh --fasta INPUT.fasta --name NAME --output OUTPUT.fasta
 
 Arguments:
-  --fasta   Input FASTA file (must be a single-sequence FASTA)
-  --name    New sequence name
+  --fasta    Input FASTA file (must be a single-sequence FASTA)
+  --name     New sequence name
   --output   Output FASTA file
 EOF
 }
@@ -56,6 +56,8 @@ rename_fasta_header() {
   local fasta="$1"
   local name="$2"
   local output="$3"
+
+  mkdir -p "$(dirname "$output")"
 
   awk -v header="$name" '
     BEGIN { done=0 }

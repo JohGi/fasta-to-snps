@@ -7,10 +7,21 @@ import csv
 wildcard_constraints:
     sample="[^/]+"
 
-def resolve_path(path_str: str) -> Path:
+
+def resolve_path(path_str: str | None, optional: bool = False) -> Path | None:
+    """Resolve a path relative to the workflow base directory.
+
+    If optional=True and path_str is empty or None, return None.
+    """
+    if not path_str:
+        if optional:
+            return None
+        raise ValueError("Path is required but empty.")
+
     path = Path(path_str)
     if path.is_absolute():
         return path
+
     return Path(workflow.current_basedir) / path
 
 def read_samples(samples_file: str) -> list[dict[str, str]]:
@@ -35,7 +46,7 @@ def read_samples(samples_file: str) -> list[dict[str, str]]:
             records.append(
                 {
                     "fasta": str(resolve_path(fasta_path)),
-                    "sample": sample_name
+                    "sample": sample_name,
                 }
             )
 
@@ -45,9 +56,22 @@ def read_samples(samples_file: str) -> list[dict[str, str]]:
     return records
 
 
-SAMPLES = read_samples(
-    resolve_path(config["samples"])
+def get_block_ids(_wildcards) -> list[str]:
+    """Read block IDs after the checkpoint has completed."""
+    block_list = checkpoints.collect_blocks.get().output[0]
+    with open(block_list) as handle:
+        return [line.strip() for line in handle if line.strip()]
+
+
+def get_alignment_outputs(wildcards):
+    """Return all expected alignment files."""
+    return expand(
+        ALIGN_DIR / "{block_id}.aln.fasta",
+        block_id=get_block_ids(wildcards),
     )
+
+
+SAMPLES = read_samples(resolve_path(config["samples"]))
 SAMPLE_NAMES = [record["sample"] for record in SAMPLES]
 FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 
@@ -57,21 +81,25 @@ SCRIPTS_DIR = Path(workflow.current_basedir) / "workflow" / "scripts"
 CLEAN_FASTA_DIR = OUTDIR / "01_clean_fasta"
 SIBELIAZ_DIR = OUTDIR / "02_sibeliaz"
 FILTERED_DIR = OUTDIR / "03_filtered_blocks"
-EXTRACT_DIR = OUTDIR / "04_extracted_sequences"
+BLOCK_LIST_DIR = OUTDIR / "04_block_lists"
+BLOCK_FASTA_DIR = OUTDIR / "05_block_fastas"
+MASKED_DIR = OUTDIR / "06_masked_block_fastas"
+ALIGN_DIR = OUTDIR / "07_alignments"
 LOG_DIR = OUTDIR / "logs"
 
 CLEAN_FASTAS = expand(CLEAN_FASTA_DIR / "{sample}.fasta", sample=SAMPLE_NAMES)
-MULTIFASTA = CLEAN_FASTA_DIR / "multifasta" / "all_genomes.fasta"
 SIBELIAZ_GFF = SIBELIAZ_DIR / "blocks_coords.gff"
 FILTERED_GFF = FILTERED_DIR / "filtered_blocks.gff"
-BLOCKS_FASTA = EXTRACT_DIR / "blocks_seq.fasta"
+BLOCK_LIST = BLOCK_LIST_DIR / "kept_blocks.list"
 
 NB_SAMPLES = len(SAMPLES)
+TE_LIB = resolve_path(config.get("te_lib", ""), optional=True)
+USE_MASKING = TE_LIB is not None
 
 
 rule all:
     input:
-      BLOCKS_FASTA
+        get_alignment_outputs
 
 
 rule rename_fasta_header:
@@ -91,21 +119,6 @@ rule rename_fasta_header:
             --output "{output}" \
             1> "{log.stdout}" \
             2> "{log.stderr}"
-        """
-
-
-rule build_multifasta:
-    input:
-        CLEAN_FASTAS
-    output:
-        MULTIFASTA
-    log:
-        stdout=LOG_DIR / "build_multifasta" / "build_multifasta.stdout",
-        stderr=LOG_DIR / "build_multifasta" / "build_multifasta.stderr"
-    shell:
-        r"""
-        mkdir -p "{CLEAN_FASTA_DIR}/multifasta" "{LOG_DIR}/build_multifasta"
-        cat {input} > "{output}" 2> "{log.stderr}"
         """
 
 
@@ -156,22 +169,122 @@ rule filter_sibeliaz_blocks:
             2> "{log.stderr}"
         """
 
-rule extract_block_sequences:
+checkpoint collect_blocks:
     input:
-        fasta=MULTIFASTA,
-        gff=FILTERED_GFF
+        FILTERED_GFF
     output:
-        BLOCKS_FASTA
+        BLOCK_LIST
     log:
-        stdout=LOG_DIR / "extract_block_sequences" / "extract_block_sequences.stdout",
-        stderr=LOG_DIR / "extract_block_sequences" / "extract_block_sequences.stderr"
+        stderr=LOG_DIR / "write_kept_blocks_list" / "write_kept_blocks_list.stderr",
+        stdout=LOG_DIR / "write_kept_blocks_list" / "write_kept_blocks_list.stdout"
     shell:
         r"""
-        mkdir -p "{EXTRACT_DIR}" "{LOG_DIR}/extract_block_sequences"
-        bedtools getfasta \
-            -fi "{input.fasta}" \
-            -bed "{input.gff}" \
-            -fo "{output}" \
+        mkdir -p "{BLOCK_LIST_DIR}" "{LOG_DIR}/write_kept_blocks_list"
+        bash "{SCRIPTS_DIR}/extract_block_ids.sh" \
+            "{input}" \
+            "{output}" \
             1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+# rule extract_one_block_fasta:
+#     input:
+#         gff=FILTERED_GFF
+#     output:
+#         BLOCK_FASTA_DIR / "{block_id}.fasta"
+#     log:
+#         stderr=LOG_DIR / "extract_one_block_fasta" / "{block_id}.stderr",
+#         stdout=LOG_DIR / "extract_one_block_fasta" / "{block_id}.stdout"
+#     params:
+#         fasta_paths=lambda wildcards: " ".join(
+#             f'"{FASTA_BY_SAMPLE[sample]}"' for sample in SAMPLE_NAMES
+#         ),
+#         sample_names=lambda wildcards: " ".join(
+#             f'"{sample}"' for sample in SAMPLE_NAMES
+#         )
+#     shell:
+#         r"""
+#         mkdir -p "{BLOCK_FASTA_DIR}" "{LOG_DIR}/extract_one_block_fasta"
+#         bash "{SCRIPTS_DIR}/extract_block_fasta.sh" \
+#             --block-id "{wildcards.block_id}" \
+#             --gff "{input.gff}" \
+#             --output "{output}" \
+#             --samples {params.sample_names} \
+#             --fastas {params.fasta_paths} \
+#             1> "{log.stdout}" \
+#             2> "{log.stderr}"
+#         """
+
+rule extract_one_block_fasta:
+    input:
+        gff=FILTERED_GFF,
+        fastas=expand(CLEAN_FASTA_DIR / "{sample}.fasta", sample=SAMPLE_NAMES)
+    output:
+        BLOCK_FASTA_DIR / "{block_id}.fasta"
+    log:
+        stderr=LOG_DIR / "extract_one_block_fasta" / "{block_id}.stderr",
+        stdout=LOG_DIR / "extract_one_block_fasta" / "{block_id}.stdout"
+    params:
+        sample_names=lambda wildcards: " ".join(f'"{sample}"' for sample in SAMPLE_NAMES),
+        fasta_paths=lambda wildcards, input: " ".join(f'"{fasta}"' for fasta in input.fastas)
+    shell:
+        r"""
+        mkdir -p "{BLOCK_FASTA_DIR}" "{LOG_DIR}/extract_one_block_fasta"
+        bash "{SCRIPTS_DIR}/extract_block_fasta.sh" \
+            --block-id "{wildcards.block_id}" \
+            --gff "{input.gff}" \
+            --output "{output}" \
+            --samples {params.sample_names} \
+            --fastas {params.fasta_paths} \
+            1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+rule mask_one_block_fasta:
+    input:
+        fasta=BLOCK_FASTA_DIR / "{block_id}.fasta"
+    output:
+        MASKED_DIR / "{block_id}.fasta.masked"
+    log:
+        stderr=LOG_DIR / "mask_one_block_fasta" / "{block_id}.stderr",
+        stdout=LOG_DIR / "mask_one_block_fasta" / "{block_id}.stdout"
+    threads: 1
+    params:
+        te_lib=TE_LIB,
+        outdir=str(MASKED_DIR)
+    shell:
+        r"""
+        mkdir -p "{MASKED_DIR}" "{LOG_DIR}/mask_one_block_fasta"
+        bash "{SCRIPTS_DIR}/mask_repeats.sh" \
+            --fasta "{input.fasta}" \
+            --te-lib "{params.te_lib}" \
+            --outdir "{params.outdir}" \
+            --threads {threads} \
+            --output "{output}" \
+            1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+
+def alignment_input(wildcards):
+    """Choose masked or unmasked FASTA depending on config."""
+    if USE_MASKING:
+        return MASKED_DIR / f"{wildcards.block_id}.fasta.masked"
+    return BLOCK_FASTA_DIR / f"{wildcards.block_id}.fasta"
+
+
+rule align_one_block:
+    input:
+        alignment_input
+    output:
+        ALIGN_DIR / "{block_id}.aln.fasta"
+    log:
+        stderr=LOG_DIR / "align_one_block" / "{block_id}.stderr"
+    threads: 1
+    shell:
+        r"""
+        mkdir -p "{ALIGN_DIR}" "{LOG_DIR}/align_one_block"
+        mafft --thread {threads} "{input}" \
+            > "{output}" \
             2> "{log.stderr}"
         """

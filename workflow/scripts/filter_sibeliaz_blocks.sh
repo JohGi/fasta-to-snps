@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Filter GFF blocks in 2-pass awk:
+# Filter SibeliaZ GFF blocks using a two-pass awk strategy.
 # Keep blocks where:
-#   - max feature length > min_len
-#   - number of distinct samples >= nb_samples
-#   - no paralogs within a samples
+#   - maximum feature length is greater than or equal to min_len
+#   - number of distinct sequence names is at least nb_samples
+#   - no sequence name appears more than once in the same block
+#   - all features in the block have the same strand
 #
-# Output: filtered GFF to stdout
+# Output: filtered GFF written to the output file.
 
 usage() {
   cat <<'EOF'
 Usage:
-  filter_blocks_gff.sh --gff blocks.gff --nb_samples N [--min_len 500]
+  filter_sibeliaz_blocks.sh --gff blocks.gff --nb_samples N [--min_len 500] --output filtered.gff
 
 Arguments:
   --gff         Input GFF file
-  --nb_samples  Required minimum number of distinct samples per block
-  --min_len     Minimum max feature length per block (default: 500)
+  --nb_samples  Required minimum number of distinct sequence names per block
+  --min_len     Minimum maximum feature length per block, inclusive (default: 500)
   --output      Output filtered GFF file
 EOF
 }
@@ -50,12 +51,22 @@ parse_args() {
   fi
 
   if [[ -z "$output" ]]; then
-      echo "ERROR: --output is required." >&2
-      exit 2
-    fi
+    echo "ERROR: --output is required." >&2
+    exit 2
+  fi
 
   if [[ ! -f "$gff" ]]; then
     echo "ERROR: GFF not found: $gff" >&2
+    exit 2
+  fi
+
+  if ! [[ "$nb_samples" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: --nb_samples must be a non-negative integer." >&2
+    exit 2
+  fi
+
+  if ! [[ "$min_len" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: --min_len must be a non-negative integer." >&2
     exit 2
   fi
 }
@@ -66,28 +77,32 @@ run_filter() {
   local nb_samples="$3"
   local output="$4"
 
+  mkdir -p "$(dirname "$output")"
+
   awk -F'\t' -v min_len="$min_len" -v nb_samples="$nb_samples" '
-    # ---- pass 1: collect stats per block ID ----
-    FNR==NR {
-      if (!match($9, /(^|;)ID=([^;]+)/, m)) next
+    FNR == NR {
+      if (!match($9, /(^|;)ID=([^;]+)/, m)) {
+        next
+      }
       id = m[2]
 
-      # samples = prefix before first underscore (Karur_..._... -> Karur)
-      split($1, a, "_")
-      sp = a[1]
+      sequence_name = $1
 
-      # feature length (1-based inclusive)
-      len = $5 - $4 + 1
-      if (len > maxlen[id]) maxlen[id] = len
+      length_bp = $5 - $4 + 1
+      if (length_bp > maxlen[id]) {
+        maxlen[id] = length_bp
+      }
 
-      key = id SUBSEP sp
-      cnt[key]++
-      if (cnt[key] == 1) nspp[id]++
+      key = id SUBSEP sequence_name
+      feature_count[key]++
+      if (feature_count[key] == 1) {
+        n_sequences[id]++
+      }
 
-      # mark blocks with paralogs (any samples count > 1)
-      if (cnt[key] > 1) has_paralog[id] = 1
+      if (feature_count[key] > 1) {
+        has_paralog[id] = 1
+      }
 
-      # Track strand consistency within each block.
       strand = $7
       if (!(id in first_strand)) {
         first_strand[id] = strand
@@ -98,15 +113,24 @@ run_filter() {
       next
     }
 
-    # ---- pass 2: print only blocks that satisfy constraints ----
     {
-      if (!match($9, /(^|;)ID=([^;]+)/, m)) next
+      if (!match($9, /(^|;)ID=([^;]+)/, m)) {
+        next
+      }
       id = m[2]
 
-      if (maxlen[id] <= min_len) next
-      if (nspp[id] < nb_samples) next
-      if (has_paralog[id]) next
-      if (mixed_strand[id]) next
+      if (maxlen[id] < min_len) {
+        next
+      }
+      if (n_sequences[id] < nb_samples) {
+        next
+      }
+      if (has_paralog[id]) {
+        next
+      }
+      if (mixed_strand[id]) {
+        next
+      }
 
       print
     }

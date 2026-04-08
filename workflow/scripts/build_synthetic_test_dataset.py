@@ -15,6 +15,10 @@ FASTA_LINE_WIDTH = 80
 
 GENOTYPE_NAMES = ["Karur", "Soldur", "Belalur", "Lloyd", "Dic2"]
 
+FASTA_HEADER_ALIASES = {
+    "Dic2": "Dic2_mlk",
+}
+
 BLOCK_ORDER = [
     "conserved_4_not_5",
     "too_short",
@@ -456,6 +460,10 @@ class DatasetWriter:
 
     output_dir: Path = field(validator=instance_of(Path))
 
+    def fasta_record_name(self, genotype_name: str) -> str:
+        """Return the FASTA record name for one genotype."""
+        return FASTA_HEADER_ALIASES.get(genotype_name, genotype_name)
+
     def qtl_dir(self) -> Path:
         """Return the QTL FASTA output directory."""
         return self.output_dir / "qtl_fastas"
@@ -492,13 +500,14 @@ class DatasetWriter:
     def write_fastas(self, records: dict[str, PseudoChromosomeRecord]) -> None:
         """Write all FASTA outputs."""
         for genotype_name, record in records.items():
+            fasta_record_name = self.fasta_record_name(genotype_name)
             write_fasta_record(
-                record_name=genotype_name,
+                record_name=fasta_record_name,
                 sequence=record.qtl_assembly.sequence,
                 output_path=self.qtl_fasta_path(genotype_name),
             )
             write_fasta_record(
-                record_name=genotype_name,
+                record_name=fasta_record_name,
                 sequence=record.pseudochromosome_assembly.sequence,
                 output_path=self.pseudochromosome_fasta_path(genotype_name),
             )
