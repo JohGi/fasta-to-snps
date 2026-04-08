@@ -1,0 +1,8 @@
+samples: tests/data/generated/samples.tsv
+outdir: results
+
+sibeliaz:
+  min_block_len: 30
+
+filtering:
+  min_len: 450

@@ -1,0 +1,17 @@
+# pixi environments
+.pixi/*
+
+# Snakemake
+.snakemake/
+
+# Python / pytest
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Workflow outputs
+results/
+logs/
+
+# OS/editor noise
+.DS_Store

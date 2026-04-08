@@ -1,0 +1,17 @@
+executor: slurm
+jobs: 20
+latency-wait: 60
+printshellcmds: true
+rerun-incomplete: true
+
+default-resources:
+  slurm_account: "dedicated-cpu@cirad-normal"
+  slurm_partition: "cpu-dedicated"
+  runtime: "1h"
+
+set-threads:
+  run_sibeliaz: 1
+
+set-resources:
+  run_sibeliaz:
+    mem_mb: 20000
