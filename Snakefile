@@ -7,6 +7,11 @@ import csv
 wildcard_constraints:
     sample="[^/]+"
 
+def resolve_path(path_str: str) -> Path:
+    path = Path(path_str)
+    if path.is_absolute():
+        return path
+    return Path(workflow.current_basedir) / path
 
 def read_samples(samples_file: str) -> list[dict[str, str]]:
     """Read a sample sheet with 2 or 3 tab-separated columns.
@@ -27,7 +32,12 @@ def read_samples(samples_file: str) -> list[dict[str, str]]:
                     f"expected 2 or 3 tab-separated columns, got {len(row)} -> {row!r}"
                 )
             fasta_path, sample_name = row[:2]
-            records.append({"fasta": fasta_path, "sample": sample_name})
+            records.append(
+                {
+                    "fasta": str(resolve_path(fasta_path)),
+                    "sample": sample_name
+                }
+            )
 
     if not records:
         raise ValueError(f"Sample sheet {samples_file!r} is empty.")
@@ -35,7 +45,9 @@ def read_samples(samples_file: str) -> list[dict[str, str]]:
     return records
 
 
-SAMPLES = read_samples(config["samples"])
+SAMPLES = read_samples(
+    resolve_path(config["samples"])
+    )
 SAMPLE_NAMES = [record["sample"] for record in SAMPLES]
 FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 
