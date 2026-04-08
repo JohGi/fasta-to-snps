@@ -187,34 +187,6 @@ checkpoint collect_blocks:
             2> "{log.stderr}"
         """
 
-# rule extract_one_block_fasta:
-#     input:
-#         gff=FILTERED_GFF
-#     output:
-#         BLOCK_FASTA_DIR / "{block_id}.fasta"
-#     log:
-#         stderr=LOG_DIR / "extract_one_block_fasta" / "{block_id}.stderr",
-#         stdout=LOG_DIR / "extract_one_block_fasta" / "{block_id}.stdout"
-#     params:
-#         fasta_paths=lambda wildcards: " ".join(
-#             f'"{FASTA_BY_SAMPLE[sample]}"' for sample in SAMPLE_NAMES
-#         ),
-#         sample_names=lambda wildcards: " ".join(
-#             f'"{sample}"' for sample in SAMPLE_NAMES
-#         )
-#     shell:
-#         r"""
-#         mkdir -p "{BLOCK_FASTA_DIR}" "{LOG_DIR}/extract_one_block_fasta"
-#         bash "{SCRIPTS_DIR}/extract_block_fasta.sh" \
-#             --block-id "{wildcards.block_id}" \
-#             --gff "{input.gff}" \
-#             --output "{output}" \
-#             --samples {params.sample_names} \
-#             --fastas {params.fasta_paths} \
-#             1> "{log.stdout}" \
-#             2> "{log.stderr}"
-#         """
-
 rule extract_one_block_fasta:
     input:
         gff=FILTERED_GFF,
