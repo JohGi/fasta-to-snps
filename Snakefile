@@ -1,4 +1,4 @@
-configfile: "CONFIG/config.yaml"
+configfile: "config/config.yaml"
 
 from pathlib import Path
 import csv
@@ -7,22 +7,6 @@ import csv
 wildcard_constraints:
     sample="[^/]+"
 
-
-def resolve_path(path_str: str | None, optional: bool = False) -> Path | None:
-    """Resolve a path relative to the workflow base directory.
-
-    If optional=True and path_str is empty or None, return None.
-    """
-    if not path_str:
-        if optional:
-            return None
-        raise ValueError("Path is required but empty.")
-
-    path = Path(path_str)
-    if path.is_absolute():
-        return path
-
-    return Path(workflow.current_basedir) / path
 
 def read_samples(samples_file: str) -> list[dict[str, str]]:
     """Read a sample sheet with 2 or 3 tab-separated columns.
@@ -45,7 +29,7 @@ def read_samples(samples_file: str) -> list[dict[str, str]]:
             fasta_path, sample_name = row[:2]
             records.append(
                 {
-                    "fasta": str(resolve_path(fasta_path)),
+                    "fasta": str(fasta_path),
                     "sample": sample_name,
                 }
             )
@@ -70,8 +54,7 @@ def get_alignment_outputs(wildcards):
         block_id=get_block_ids(wildcards),
     )
 
-
-SAMPLES = read_samples(resolve_path(config["samples"]))
+SAMPLES = read_samples(config["samples"])
 SAMPLE_NAMES = [record["sample"] for record in SAMPLES]
 FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 
@@ -93,7 +76,7 @@ FILTERED_GFF = FILTERED_DIR / "filtered_blocks.gff"
 BLOCK_LIST = BLOCK_LIST_DIR / "kept_blocks.list"
 
 NB_SAMPLES = len(SAMPLES)
-TE_LIB = resolve_path(config.get("te_lib", ""), optional=True)
+TE_LIB = Path(config["te_lib"]) if config.get("te_lib") else None
 USE_MASKING = TE_LIB is not None
 
 
@@ -253,10 +236,12 @@ rule align_one_block:
     log:
         stderr=LOG_DIR / "align_one_block" / "{block_id}.stderr"
     threads: 1
+    params:
+        extra_options=config["mafft"]["extra_options"]
     shell:
         r"""
         mkdir -p "{ALIGN_DIR}" "{LOG_DIR}/align_one_block"
-        mafft --thread {threads} "{input}" \
+        mafft --thread {threads} {params.extra_options} "{input}" \
             > "{output}" \
             2> "{log.stderr}"
         """

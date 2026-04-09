@@ -1,4 +1,4 @@
-samples: tests/data/generated/samples.tsv
+samples: dev/integration_case_builder/dataset/generated/samples.tsv
 outdir: results
 
 sibeliaz:
@@ -7,4 +7,7 @@ sibeliaz:
 filtering:
   min_len: 450
 
-te_lib: tests/data/TE_lib/trep-db_complete_Rel-19.fasta
+mafft:
+  extra_options: "" #--genafpair --maxiterate 1000
+
+te_lib: dev/integration_case_builder/dataset/TE_lib/trep-db_complete_Rel-19.fasta

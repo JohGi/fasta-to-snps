@@ -1,0 +1,41 @@
+##gff-version 3.1.26
+##sequence-region Karur 1 9690
+##sequence-region Soldur 1 9735
+##sequence-region Belalur 1 9721
+##sequence-region Lloyd 1 9662
+##sequence-region Dic2 1 9676
+Karur	SibeliaZ	SO:0000856	2228	2827	.	+	.	ID=2
+Soldur	SibeliaZ	SO:0000856	2240	2839	.	+	.	ID=2
+Belalur	SibeliaZ	SO:0000856	2269	2868	.	+	.	ID=2
+Lloyd	SibeliaZ	SO:0000856	2201	2800	.	+	.	ID=2
+Dic2	SibeliaZ	SO:0000856	2216	2815	.	-	.	ID=2
+Lloyd	SibeliaZ	SO:0000856	3254	3788	.	+	.	ID=3
+Dic2	SibeliaZ	SO:0000856	3302	3831	.	+	.	ID=3
+Belalur	SibeliaZ	SO:0000856	3359	3893	.	+	.	ID=3
+Soldur	SibeliaZ	SO:0000856	3294	3828	.	+	.	ID=3
+Karur	SibeliaZ	SO:0000856	3337	3871	.	+	.	ID=3
+Karur	SibeliaZ	SO:0000856	4376	4965	.	+	.	ID=4
+Soldur	SibeliaZ	SO:0000856	4323	4908	.	+	.	ID=4
+Belalur	SibeliaZ	SO:0000856	4369	4958	.	+	.	ID=4
+Lloyd	SibeliaZ	SO:0000856	4260	4849	.	+	.	ID=4
+Dic2	SibeliaZ	SO:0000856	4294	4883	.	+	.	ID=4
+Dic2	SibeliaZ	SO:0000856	5370	5947	.	+	.	ID=5
+Lloyd	SibeliaZ	SO:0000856	5318	5895	.	+	.	ID=5
+Belalur	SibeliaZ	SO:0000856	5422	5999	.	+	.	ID=5
+Karur	SibeliaZ	SO:0000856	5423	6000	.	+	.	ID=5
+Soldur	SibeliaZ	SO:0000856	5420	5997	.	+	.	ID=5
+Karur	SibeliaZ	SO:0000856	6466	7154	.	+	.	ID=6
+Soldur	SibeliaZ	SO:0000856	6497	7185	.	+	.	ID=6
+Belalur	SibeliaZ	SO:0000856	6499	7187	.	+	.	ID=6
+Lloyd	SibeliaZ	SO:0000856	6387	7075	.	+	.	ID=6
+Dic2	SibeliaZ	SO:0000856	6425	7113	.	+	.	ID=6
+Lloyd	SibeliaZ	SO:0000856	7574	8209	.	+	.	ID=7
+Dic2	SibeliaZ	SO:0000856	7608	8243	.	+	.	ID=7
+Belalur	SibeliaZ	SO:0000856	7649	8284	.	+	.	ID=7
+Soldur	SibeliaZ	SO:0000856	7651	8286	.	+	.	ID=7
+Karur	SibeliaZ	SO:0000856	7641	8280	.	+	.	ID=7
+Karur	SibeliaZ	SO:0000856	8747	9238	.	+	.	ID=8
+Soldur	SibeliaZ	SO:0000856	8767	9258	.	+	.	ID=8
+Belalur	SibeliaZ	SO:0000856	8743	9234	.	+	.	ID=8
+Lloyd	SibeliaZ	SO:0000856	8682	9173	.	+	.	ID=8
+Dic2	SibeliaZ	SO:0000856	8722	9213	.	+	.	ID=8

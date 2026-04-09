@@ -1,0 +1,13 @@
+samples: samples.tsv
+outdir: results
+
+sibeliaz:
+  min_block_len: 30
+
+filtering:
+  min_len: 450
+
+mafft:
+  extra_options: "" #--genafpair --maxiterate 1000
+
+te_lib: ""
