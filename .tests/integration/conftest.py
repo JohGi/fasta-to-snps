@@ -21,3 +21,7 @@ def integration_cases_dir(repo_root: Path) -> Path:
 def integration_config_dir(repo_root: Path) -> Path:
     """Return the directory containing shared integration test configuration."""
     return repo_root / ".tests" / "integration" / "config"
+
+@pytest.fixture
+def integration_resources_dir(repo_root: Path) -> Path:
+    return repo_root / ".tests" / "integration" / "resources"

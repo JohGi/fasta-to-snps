@@ -76,7 +76,8 @@ FILTERED_GFF = FILTERED_DIR / "filtered_blocks.gff"
 BLOCK_LIST = BLOCK_LIST_DIR / "kept_blocks.list"
 
 NB_SAMPLES = len(SAMPLES)
-TE_LIB = Path(config["te_lib"]) if config.get("te_lib") else None
+te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")
+TE_LIB = Path(te_lib_value) if te_lib_value else None
 USE_MASKING = TE_LIB is not None
 
 
@@ -139,7 +140,7 @@ rule filter_sibeliaz_blocks:
         stderr=LOG_DIR / "filter_sibeliaz_blocks" / "filter_sibeliaz_blocks.stderr"
     params:
         nb_samples=NB_SAMPLES,
-        min_len=config["filtering"]["min_len"]
+        min_len=config["block_filtering"]["min_len"]
     shell:
         r"""
         mkdir -p "{FILTERED_DIR}" "{LOG_DIR}/filter_sibeliaz_blocks"

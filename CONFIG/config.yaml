@@ -4,10 +4,11 @@ outdir: results
 sibeliaz:
   min_block_len: 30
 
-filtering:
+block_filtering:
   min_len: 450
+
+repeat_masking:
+  te_lib: ".tests/integration/resources/mini_TE_lib.fasta"
 
 mafft:
   extra_options: "" #--genafpair --maxiterate 1000
-
-te_lib: dev/integration_case_builder/dataset/TE_lib/trep-db_complete_Rel-19.fasta
