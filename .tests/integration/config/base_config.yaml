@@ -12,3 +12,10 @@ repeat_masking:
 
 mafft:
   extra_options: ""
+
+snp_detection:
+  min_flank: ""
+
+snp_group_filtering:
+  group_a: []
+  group_b: []
