@@ -11,12 +11,12 @@ from helpers import (
     run_snakemake,
 )
 
-RULE_NAME = "extract_one_block_fasta"
+RULE_NAME = "project_snp_positions"
 
 TEST_CASES = [
     {
         "case_name": "case_basic",
-        "target": "results/04_block_fastas/3.fasta",
+        "target": "results/09_snp_positions/snp_positions_long.tsv",
     },
 ]
 
@@ -26,14 +26,14 @@ TEST_CASES = [
     TEST_CASES,
     ids=[case["case_name"] for case in TEST_CASES],
 )
-def test_extract_one_block_fasta_cases(
+def test_project_snp_positions_cases(
     tmp_path: Path,
     repo_root: Path,
     integration_cases_dir: Path,
     integration_config_dir: Path,
     case: dict[str, str],
 ) -> None:
-    """Run integration tests for the extract_one_block_fasta rule."""
+    """Run integration tests for the project_snp_positions rule."""
     case_dir = integration_cases_dir / RULE_NAME / case["case_name"]
 
     copy_case_input(case_dir / "input", tmp_path)
@@ -41,6 +41,7 @@ def test_extract_one_block_fasta_cases(
     configfile = prepare_test_config(
         base_config=integration_config_dir / "base_config.yaml",
         workdir=tmp_path,
+        override_config=case_dir / "config_override.yaml",
     )
 
     run_snakemake(
@@ -51,6 +52,6 @@ def test_extract_one_block_fasta_cases(
     )
 
     compare_directories(
-        expected_dir=case_dir / "expected" / "results" / "04_block_fastas",
-        observed_dir=tmp_path / "results" / "04_block_fastas",
+        expected_dir=case_dir / "expected" / "results" / "09_snp_positions",
+        observed_dir=tmp_path / "results" / "09_snp_positions",
     )

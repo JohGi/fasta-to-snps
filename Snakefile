@@ -129,8 +129,8 @@ def write_lines(output_path: Path, values: list[str]) -> None:
         for value in values:
             handle.write(f"{value}\n")
 
-
-SAMPLES = read_samples(config["samples"])
+SAMPLES_TSV = Path(config["samples"])
+SAMPLES = read_samples(SAMPLES_TSV)
 SAMPLE_NAMES = [record["sample"] for record in SAMPLES]
 FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 
@@ -139,23 +139,26 @@ SCRIPTS_DIR = Path(workflow.current_basedir) / "workflow" / "scripts"
 
 CLEAN_FASTA_DIR = OUTDIR / "01_clean_fasta"
 SIBELIAZ_DIR = OUTDIR / "02_sibeliaz"
-FILTERED_DIR = OUTDIR / "03_filtered_blocks"
-BLOCK_LIST_DIR = OUTDIR / "04_block_lists"
-BLOCK_FASTA_DIR = OUTDIR / "05_block_fastas"
-MASKED_DIR = OUTDIR / "06_masked_block_fastas"
-ALIGN_DIR = OUTDIR / "07_alignments"
-SNP_DIR = OUTDIR / "08_snps"
-FILTERED_SNP_DIR = OUTDIR / "09_filtered_snps"
+FILTERED_BLOCKS_DIR = OUTDIR / "03_filtered_blocks"
+BLOCK_FASTA_DIR = OUTDIR / "04_block_fastas"
+MASKED_DIR = OUTDIR / "05_masked_block_fastas"
+ALIGN_DIR = OUTDIR / "06_alignments"
+SNP_DIR = OUTDIR / "07_snps"
+FILTERED_SNP_DIR = OUTDIR / "08_filtered_snps"
+SNP_POS_DIR = OUTDIR / "09_snp_positions"
 LOG_DIR = OUTDIR / "logs"
 
 CLEAN_FASTAS = expand(CLEAN_FASTA_DIR / "{sample}.fasta", sample=SAMPLE_NAMES)
 SIBELIAZ_GFF = SIBELIAZ_DIR / "blocks_coords.gff"
-FILTERED_GFF = FILTERED_DIR / "filtered_blocks.gff"
-BLOCK_LIST = BLOCK_LIST_DIR / "kept_blocks.list"
+FILTERED_GFF = FILTERED_BLOCKS_DIR / "filtered_blocks.gff"
+BLOCK_LIST = FILTERED_BLOCKS_DIR / "kept_blocks.list"
+BLOCK_STARTS_TSV = FILTERED_BLOCKS_DIR / "block_starts.tsv"
 SNP_VCF = SNP_DIR / "snps.vcf"
 GROUP_A_LIST = FILTERED_SNP_DIR / "group_a_samples.list"
 GROUP_B_LIST = FILTERED_SNP_DIR / "group_b_samples.list"
 FILTERED_SNP_VCF = FILTERED_SNP_DIR / "filtered_snps.vcf"
+SNP_POS_LONG_TSV = SNP_POS_DIR / "snp_positions_long.tsv"
+SNP_POS_WIDE_TSV = SNP_POS_DIR / "snp_positions_wide.tsv"
 
 NB_SAMPLES = len(SAMPLES)
 te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")
@@ -169,7 +172,8 @@ SNP_FILTER_GROUP_A, SNP_FILTER_GROUP_B, USE_SNP_GROUP_FILTERING = resolve_snp_fi
 
 rule all:
     input:
-        get_final_snp_output()
+        SNP_POS_LONG_TSV,
+        SNP_POS_WIDE_TSV
 
 
 rule rename_fasta_header:
@@ -229,13 +233,31 @@ rule filter_sibeliaz_blocks:
         min_len=config["block_filtering"]["min_len"]
     shell:
         r"""
-        mkdir -p "{FILTERED_DIR}" "{LOG_DIR}/filter_sibeliaz_blocks"
+        mkdir -p "{FILTERED_BLOCKS_DIR}" "{LOG_DIR}/filter_sibeliaz_blocks"
         bash "{SCRIPTS_DIR}/filter_sibeliaz_blocks.sh" \
             --gff "{input}" \
             --nb_samples {params.nb_samples} \
             --min_len {params.min_len} \
             --output "{output}" \
             1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+rule write_block_starts_tsv:
+    input:
+        FILTERED_GFF
+    output:
+        BLOCK_STARTS_TSV
+    log:
+        stdout=LOG_DIR / "write_block_starts_tsv" / "write_block_starts_tsv.stdout",
+        stderr=LOG_DIR / "write_block_starts_tsv" / "write_block_starts_tsv.stderr"
+    shell:
+        r"""
+        mkdir -p "$(dirname {output})" "{LOG_DIR}/write_block_starts_tsv"
+        bash "{SCRIPTS_DIR}/write_block_starts_tsv.sh" \
+            --input "{input}" \
+            --output "{output}" \
+            > "{log.stdout}" \
             2> "{log.stderr}"
         """
 
@@ -249,7 +271,7 @@ checkpoint collect_blocks:
         stdout=LOG_DIR / "write_kept_blocks_list" / "write_kept_blocks_list.stdout"
     shell:
         r"""
-        mkdir -p "{BLOCK_LIST_DIR}" "{LOG_DIR}/write_kept_blocks_list"
+        mkdir -p "{FILTERED_BLOCKS_DIR}" "{LOG_DIR}/write_kept_blocks_list"
         bash "{SCRIPTS_DIR}/extract_block_ids.sh" \
             "{input}" \
             "{output}" \
@@ -383,5 +405,31 @@ rule filter_snps_by_groups:
             --group-a-file "{input.group_a}" \
             --group-b-file "{input.group_b}" \
             1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+rule project_snp_positions:
+    input:
+        vcf=get_final_snp_output(),
+        block_starts=BLOCK_STARTS_TSV,
+        samples_tsv=SAMPLES_TSV,
+        # alignments=get_alignment_outputs
+    output:
+        long=SNP_POS_LONG_TSV,
+        wide=SNP_POS_WIDE_TSV
+    log:
+        stdout=LOG_DIR / "project_snp_positions" / "project_snp_positions.stdout",
+        stderr=LOG_DIR / "project_snp_positions" / "project_snp_positions.stderr"
+    shell:
+        r"""
+        mkdir -p "$(dirname {output.long})" "{LOG_DIR}/project_snp_positions"
+        python3 "{SCRIPTS_DIR}/project_snp_positions.py" \
+            --vcf "{input.vcf}" \
+            --block-starts "{input.block_starts}" \
+            --samples-tsv "{input.samples_tsv}" \
+            --align-dir "{ALIGN_DIR}" \
+            --long-output "{output.long}" \
+            --wide-output "{output.wide}" \
+            > "{log.stdout}" \
             2> "{log.stderr}"
         """

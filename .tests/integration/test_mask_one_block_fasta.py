@@ -17,11 +17,11 @@ RULE_NAME = "mask_one_block_fasta"
 TEST_CASES = [
     {
         "case_name": "no_repeats",
-        "target": "results/06_masked_block_fastas/3.fasta.masked",
+        "target": "results/05_masked_block_fastas/3.fasta.masked",
     },
     {
         "case_name": "with_repeats",
-        "target": "results/06_masked_block_fastas/5.fasta.masked",
+        "target": "results/05_masked_block_fastas/5.fasta.masked",
     },
 ]
 
@@ -59,7 +59,7 @@ def test_mask_one_block_fasta_cases(
     )
 
     compare_directories(
-        expected_dir=case_dir / "expected" / "results" / "06_masked_block_fastas",
-        observed_dir=tmp_path / "results" / "06_masked_block_fastas",
+        expected_dir=case_dir / "expected" / "results" / "05_masked_block_fastas",
+        observed_dir=tmp_path / "results" / "05_masked_block_fastas",
         ignore_suffixes={".out", ".tbl", ".cat", ".all"},
     )
