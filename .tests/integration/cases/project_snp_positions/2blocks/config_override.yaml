@@ -1,0 +1,5 @@
+snp_group_filtering:
+  group_a:
+    - SampleA
+  group_b:
+    - SampleB

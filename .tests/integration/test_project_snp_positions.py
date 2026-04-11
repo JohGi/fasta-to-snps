@@ -15,10 +15,27 @@ RULE_NAME = "project_snp_positions"
 
 TEST_CASES = [
     {
-        "case_name": "case_basic",
+        "case_name": "with_gaps",
+        "target": "results/09_snp_positions/snp_positions_long.tsv",
+    },
+    {
+        "case_name": "no_source_seq_offset",
+        "target": "results/09_snp_positions/snp_positions_long.tsv",
+    },
+    {
+        "case_name": "vcf_aln_different_order",
+        "target": "results/09_snp_positions/snp_positions_long.tsv",
+    },
+    {
+        "case_name": "2snps",
+        "target": "results/09_snp_positions/snp_positions_long.tsv",
+    },
+    {
+        "case_name": "2blocks",
         "target": "results/09_snp_positions/snp_positions_long.tsv",
     },
 ]
+
 
 
 @pytest.mark.parametrize(
