@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Author: Johanna Girodolle
 
-"""Project filtered SNP positions from alignment coordinates to block, zone, and source sequence coordinates."""
+"""Map filtered SNP coordinates from alignment coordinates to block, zone, and source sequence coordinates."""
 
 from __future__ import annotations
 

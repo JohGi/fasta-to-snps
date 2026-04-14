@@ -21,3 +21,6 @@ snp_group_filtering:
     - Karur
   group_b:
     - Soldur
+
+batching:
+  blocks_per_job: 1

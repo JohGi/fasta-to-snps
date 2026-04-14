@@ -1,0 +1,201 @@
+from pathlib import Path
+import csv
+
+
+wildcard_constraints:
+    sample="[^/]+"
+
+
+def read_samples(samples_file: str) -> list[dict[str, str]]:
+    """Read a sample sheet with 2 or 3 tab-separated columns.
+
+    Only the first two columns are used:
+        1. FASTA path
+        2. Sample name
+    """
+    records = []
+    with open(samples_file, newline="") as handle:
+        reader = csv.reader(handle, delimiter="\t")
+        for row in reader:
+            if not row:
+                continue
+            if len(row) not in {2, 3}:
+                raise ValueError(
+                    f"Invalid line in sample sheet {samples_file!r}: "
+                    f"expected 2 or 3 tab-separated columns, got {len(row)} -> {row!r}"
+                )
+            fasta_path, sample_name = row[:2]
+            records.append(
+                {
+                    "fasta": str(fasta_path),
+                    "sample": sample_name,
+                }
+            )
+
+    if not records:
+        raise ValueError(f"Sample sheet {samples_file!r} is empty.")
+
+    return records
+
+
+def resolve_snp_filter_groups(
+    sample_names: list[str],
+    config: dict,
+) -> tuple[list[str], list[str], bool]:
+    """Resolve SNP filtering groups from config.
+
+    If both groups are empty, SNP filtering is disabled.
+
+    If one group is empty and the other is not, the empty group is filled
+    with all samples not present in the non-empty group.
+
+    Returns:
+        A tuple containing:
+            - resolved group A
+            - resolved group B
+            - whether SNP filtering is enabled
+    """
+    group_a = list(
+        dict.fromkeys(config.get("snp_group_filtering", {}).get("group_a", []))
+    )
+    group_b = list(
+        dict.fromkeys(config.get("snp_group_filtering", {}).get("group_b", []))
+    )
+
+    if not group_a and not group_b:
+        return [], [], False
+
+    if not group_a:
+        excluded_samples = set(group_b)
+        group_a = [
+            sample for sample in sample_names
+            if sample not in excluded_samples
+        ]
+
+    if not group_b:
+        excluded_samples = set(group_a)
+        group_b = [
+            sample for sample in sample_names
+            if sample not in excluded_samples
+        ]
+
+    unknown_samples = sorted(
+        (set(group_a) | set(group_b)) - set(sample_names)
+    )
+    if unknown_samples:
+        raise ValueError(
+            f"Unknown sample names in snp_group_filtering groups: {unknown_samples}"
+        )
+
+    overlap_samples = sorted(set(group_a) & set(group_b))
+    if overlap_samples:
+        raise ValueError(
+            f"Samples cannot belong to both snp_group_filtering groups: {overlap_samples}"
+        )
+
+    if not group_a or not group_b:
+        raise ValueError("Resolved snp_group_filtering groups cannot be empty.")
+
+    return group_a, group_b, True
+
+
+def get_split_block_dir(_wildcards=None) -> Path:
+    """Return the checkpoint output directory containing per-block FASTA files."""
+    return Path(checkpoints.split_block_fastas.get().output[0])
+
+
+def get_chunk_list_dir(_wildcards=None) -> Path:
+    """Return the checkpoint output directory containing chunk list files."""
+    return Path(checkpoints.split_block_list_into_chunks.get().output.chunk_dir)
+
+
+def get_chunk_ids(_wildcards=None) -> list[str]:
+    """Return all chunk IDs after checkpoint completion."""
+    chunk_dir = get_chunk_list_dir()
+    return sorted(path.stem for path in chunk_dir.glob("*.list"))
+
+
+def get_align_chunk_outputs(_wildcards=None) -> list[Path]:
+    """Return all alignment chunk completion markers after checkpoint completion."""
+    return [ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
+
+
+def get_alignment_fasta_dir() -> str:
+    """Return the FASTA directory path used for alignment."""
+    if USE_MASKING:
+        return str(MASKED_DIR)
+    return str(BLOCK_FASTA_SPLIT_DIR)
+
+
+def get_alignment_inputs(wildcards) -> list[Path]:
+    """Return prerequisite inputs for one alignment chunk."""
+    inputs = [MASK_CHUNK_DIR / f"{wildcards.chunk_id}.list"]
+
+    if USE_MASKING:
+        inputs.append(MASKED_CHUNK_DIR / f"{wildcards.chunk_id}.done")
+    else:
+        inputs.append(get_split_block_dir())
+
+    return inputs
+
+def get_final_snp_output() -> Path:
+    """Return the final SNP output path depending on filtering settings."""
+    if USE_SNP_GROUP_FILTERING:
+        return FILTERED_SNP_VCF
+    return SNP_VCF
+
+
+def write_lines(output_path: Path, values: list[str]) -> None:
+    """Write one value per line to a text file."""
+    with open(output_path, "w", encoding="utf-8") as handle:
+        for value in values:
+            handle.write(f"{value}\n")
+
+
+SAMPLES_TSV = Path(config["samples"])
+SAMPLES = read_samples(SAMPLES_TSV)
+SAMPLE_NAMES = [record["sample"] for record in SAMPLES]
+FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
+
+OUTDIR = Path(config["outdir"])
+SCRIPTS_DIR = Path(workflow.current_basedir) / "../scripts"
+
+CLEAN_FASTA_DIR = OUTDIR / "01_clean_fasta"
+MULTIFASTA_DIR = CLEAN_FASTA_DIR / "multifasta"
+SIBELIAZ_DIR = OUTDIR / "02_sibeliaz"
+FILTERED_BLOCKS_DIR = OUTDIR / "03_filtered_blocks"
+MASK_CHUNK_DIR = FILTERED_BLOCKS_DIR / "mask_chunks"
+BLOCK_FASTA_DIR = OUTDIR / "04_block_fastas"
+BLOCK_FASTA_SPLIT_DIR = BLOCK_FASTA_DIR / "per_block"
+MASKED_DIR = OUTDIR / "05_masked_block_fastas"
+MASKED_CHUNK_DIR = MASKED_DIR / "chunks"
+ALIGN_DIR = OUTDIR / "06_alignments"
+SNP_DIR = OUTDIR / "07_snps"
+FILTERED_SNP_DIR = OUTDIR / "08_filtered_snps"
+SNP_POS_DIR = OUTDIR / "09_snp_positions"
+LOG_DIR = OUTDIR / "logs"
+BENCHMARK_DIR = OUTDIR / "benchmarks"
+
+CLEAN_FASTAS = expand(CLEAN_FASTA_DIR / "{sample}.fasta", sample=SAMPLE_NAMES)
+ALL_GENOMES_FASTA = MULTIFASTA_DIR / "all_genomes.fasta"
+SIBELIAZ_GFF = SIBELIAZ_DIR / "blocks_coords.gff"
+FILTERED_GFF = FILTERED_BLOCKS_DIR / "filtered_blocks.gff"
+BLOCK_LIST = FILTERED_BLOCKS_DIR / "kept_blocks.list"
+BLOCK_STARTS_TSV = FILTERED_BLOCKS_DIR / "block_starts.tsv"
+ALL_BLOCKS_RAW_FASTA = BLOCK_FASTA_DIR / "all_blocks.raw.fasta"
+SNP_VCF = SNP_DIR / "snps.vcf"
+GROUP_A_LIST = FILTERED_SNP_DIR / "group_a_samples.list"
+GROUP_B_LIST = FILTERED_SNP_DIR / "group_b_samples.list"
+FILTERED_SNP_VCF = FILTERED_SNP_DIR / "filtered_snps.vcf"
+SNP_POS_LONG_TSV = SNP_POS_DIR / "snp_positions_long.tsv"
+SNP_POS_WIDE_TSV = SNP_POS_DIR / "snp_positions_wide.tsv"
+
+NB_SAMPLES = len(SAMPLES)
+te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")
+TE_LIB = Path(te_lib_value) if te_lib_value else None
+USE_MASKING = TE_LIB is not None
+
+SNP_FILTER_GROUP_A, SNP_FILTER_GROUP_B, USE_SNP_GROUP_FILTERING = resolve_snp_filter_groups(
+    sample_names=SAMPLE_NAMES,
+    config=config,
+)

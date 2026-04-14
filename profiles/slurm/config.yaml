@@ -3,6 +3,8 @@ jobs: 20
 latency-wait: 60
 printshellcmds: true
 rerun-incomplete: true
+seconds-between-status-checks: 1
+slurm-init-seconds-before-status-checks: 5
 
 default-resources:
   slurm_account: "dedicated-cpu@cirad-normal"

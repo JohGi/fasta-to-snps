@@ -68,19 +68,28 @@ if [[ ! -s "$te_lib" ]]; then
 fi
 
 mkdir -p "$outdir"
+mkdir -p "$(dirname "$output")"
+
+block_name="$(basename "$fasta")"
+block_tmp_dir="$(mktemp -d "${outdir}/repeatmasker_${block_name}.XXXXXX")"
+trap 'rm -rf "$block_tmp_dir"' EXIT
+
+masked_candidate="$block_tmp_dir/${block_name}.masked"
 
 RepeatMasker \
     -pa "$threads" \
     -no_is \
-    -dir "$outdir" \
+    -dir "$block_tmp_dir" \
     -lib "$te_lib" \
     "$fasta"
 
-masked_candidate="$outdir/$(basename "$fasta").masked"
+cp "$block_tmp_dir"/* "$outdir"/
 
-if [[ -f "$masked_candidate" ]]; then
-    if [[ "$masked_candidate" != "$output" ]]; then
-      cp "$masked_candidate" "$output"
+masked_output="$outdir/${block_name}.masked"
+
+if [[ -f "$masked_output" ]]; then
+    if [[ "$masked_output" != "$output" ]]; then
+        cp "$masked_output" "$output"
     fi
 else
     cp "$fasta" "$output"
