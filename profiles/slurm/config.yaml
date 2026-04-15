@@ -17,3 +17,5 @@ set-threads:
 set-resources:
   run_sibeliaz:
     mem_mb: 20000
+  run_pairwise_minimap2:
+    mem_mb: 10000

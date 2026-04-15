@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [tasks]
 
-[dependencies]
+[feature.workflow.dependencies]
 python = ">=3.13.12,<3.14"
 snakemake = ">=9.19.0,<10"
 snakemake-executor-plugin-slurm = ">=2.6.0,<3"
@@ -19,3 +19,16 @@ mafft = ">=7.526,<8"
 seqtui = ">=0.1.1,<0.2"
 biopython = ">=1.87,<2"
 polars = ">=1.39.3,<2"
+perl = ">=5.32.1,<5.33"
+minimap2 = ">=2.30,<3"
+
+[feature.dotplot.dependencies]
+python = "3.9.*"
+blastn2dotplots = "==1.1.2"
+numpy = ">=1.24,<2"
+perl = "*"
+minimap2 = "*"
+
+[environments]
+default = { features = ["workflow"], no-default-feature = true }
+dotplot = { features = ["dotplot"], no-default-feature = true }

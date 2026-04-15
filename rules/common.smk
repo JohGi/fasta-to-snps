@@ -1,9 +1,11 @@
 from pathlib import Path
 import csv
+from itertools import combinations
 
 
 wildcard_constraints:
-    sample="[^/]+"
+    sample="[^/]+",
+    pair_id="[^/]+"
 
 
 def read_samples(samples_file: str) -> list[dict[str, str]]:
@@ -98,6 +100,48 @@ def resolve_snp_filter_groups(
 
     return group_a, group_b, True
 
+def resolve_dotplot_pairs(
+    sample_names: list[str],
+    config: dict,
+) -> list[tuple[str, str]]:
+    """Resolve pairwise dotplot comparisons from config."""
+    pivot = str(config.get("visualization", {}).get("dotplot_pivot", "")).strip()
+
+    if not pivot:
+        return list(combinations(sample_names, 2))
+
+    if pivot not in sample_names:
+        raise ValueError(
+            f"Unknown visualization.dotplot_pivot: {pivot!r}. "
+            f"Expected one of: {sample_names}"
+        )
+
+    return [(pivot, sample) for sample in sample_names if sample != pivot]
+
+
+def build_pair_id(sample_a: str, sample_b: str) -> str:
+    """Build a stable pair identifier."""
+    return f"{sample_a}__vs__{sample_b}"
+
+
+def split_pair_id(pair_id: str) -> tuple[str, str]:
+    """Decode a pair identifier."""
+    parts = pair_id.split("__vs__")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"Invalid pair_id: {pair_id!r}")
+    return parts[0], parts[1]
+
+
+def get_pair_sample_a(wildcards) -> str:
+    """Return sample A for a pair wildcard."""
+    sample_a, _sample_b = split_pair_id(wildcards.pair_id)
+    return sample_a
+
+
+def get_pair_sample_b(wildcards) -> str:
+    """Return sample B for a pair wildcard."""
+    _sample_a, sample_b = split_pair_id(wildcards.pair_id)
+    return sample_b
 
 def get_split_block_dir(_wildcards=None) -> Path:
     """Return the checkpoint output directory containing per-block FASTA files."""
@@ -173,6 +217,11 @@ ALIGN_DIR = OUTDIR / "06_alignments"
 SNP_DIR = OUTDIR / "07_snps"
 FILTERED_SNP_DIR = OUTDIR / "08_filtered_snps"
 SNP_POS_DIR = OUTDIR / "09_snp_positions"
+DOTPLOT_DIR = OUTDIR / "10_dotplots"
+DOTPLOT_HIGHLIGHT_DIR = DOTPLOT_DIR / "highlights"
+DOTPLOT_PAF_DIR = DOTPLOT_DIR / "paf"
+DOTPLOT_FORMATTED_DIR = DOTPLOT_DIR / "formatted"
+DOTPLOT_IMAGE_DIR = DOTPLOT_DIR / "images"
 LOG_DIR = OUTDIR / "logs"
 BENCHMARK_DIR = OUTDIR / "benchmarks"
 
@@ -189,6 +238,28 @@ GROUP_B_LIST = FILTERED_SNP_DIR / "group_b_samples.list"
 FILTERED_SNP_VCF = FILTERED_SNP_DIR / "filtered_snps.vcf"
 SNP_POS_LONG_TSV = SNP_POS_DIR / "snp_positions_long.tsv"
 SNP_POS_WIDE_TSV = SNP_POS_DIR / "snp_positions_wide.tsv"
+DOTPLOT_PAIRS = resolve_dotplot_pairs(SAMPLE_NAMES, config)
+DOTPLOT_PAIR_IDS = [build_pair_id(sample_a, sample_b) for sample_a, sample_b in DOTPLOT_PAIRS]
+DOTPLOT_HIGHLIGHTS = expand(
+    DOTPLOT_HIGHLIGHT_DIR / "{pair_id}.tsv",
+    pair_id=DOTPLOT_PAIR_IDS,
+)
+DOTPLOT_PAFS = expand(
+    DOTPLOT_PAF_DIR / "{pair_id}.paf",
+    pair_id=DOTPLOT_PAIR_IDS,
+)
+DOTPLOT_FORMATTED = expand(
+    DOTPLOT_FORMATTED_DIR / "{pair_id}.tsv",
+    pair_id=DOTPLOT_PAIR_IDS,
+)
+DOTPLOT_SIMPLE_PDFS = expand(
+    DOTPLOT_IMAGE_DIR / "{pair_id}.simple.pdf",
+    pair_id=DOTPLOT_PAIR_IDS,
+)
+DOTPLOT_HIGHLIGHT_PDFS = expand(
+    DOTPLOT_IMAGE_DIR / "{pair_id}.highlight_crossed.pdf",
+    pair_id=DOTPLOT_PAIR_IDS,
+)
 
 NB_SAMPLES = len(SAMPLES)
 te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")

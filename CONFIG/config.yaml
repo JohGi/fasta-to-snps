@@ -24,3 +24,6 @@ snp_group_filtering:
 
 batching:
   blocks_per_job: 2
+
+visualization:
+  dotplot_pivot: ""
