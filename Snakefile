@@ -5,6 +5,7 @@ include: "rules/blocks.smk"
 include: "rules/snps.smk"
 include: "rules/coordinate_mapping.smk"
 include: "rules/dotplots.smk"
+include: "rules/region_overview.smk"
 
 rule all:
     input:
@@ -12,3 +13,4 @@ rule all:
         SNP_POS_WIDE_TSV,
         DOTPLOT_SIMPLE_PDFS,
         # DOTPLOT_HIGHLIGHT_PDFS
+        REGION_TRACK_HTML,

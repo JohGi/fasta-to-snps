@@ -222,6 +222,7 @@ DOTPLOT_HIGHLIGHT_DIR = DOTPLOT_DIR / "highlights"
 DOTPLOT_PAF_DIR = DOTPLOT_DIR / "paf"
 DOTPLOT_FORMATTED_DIR = DOTPLOT_DIR / "formatted"
 DOTPLOT_IMAGE_DIR = DOTPLOT_DIR / "images"
+REGION_TRACK_DIR = OUTDIR / "11_region_tracks"
 LOG_DIR = OUTDIR / "logs"
 BENCHMARK_DIR = OUTDIR / "benchmarks"
 
@@ -260,6 +261,8 @@ DOTPLOT_HIGHLIGHT_PDFS = expand(
     DOTPLOT_IMAGE_DIR / "{pair_id}.highlight_crossed.pdf",
     pair_id=DOTPLOT_PAIR_IDS,
 )
+REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
+
 
 NB_SAMPLES = len(SAMPLES)
 te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")
