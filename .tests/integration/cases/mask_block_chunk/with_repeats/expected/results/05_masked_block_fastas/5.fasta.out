@@ -1,0 +1,28 @@
+   SW   perc perc perc  query              position in query    matching                 repeat          position in repeat
+score   div. del. ins.  sequence           begin end   (left)   repeat                   class/family  begin  end    (left)  ID
+
+  638    9.8  0.0  0.0  Belalur:5424-6001      1    82  (496) C DTC_Hvul_Manor_RND-1     Unspecified    (922)   2480   2399   1  
+  267   15.2  6.7  1.6  Belalur:5424-6001     93   152  (426) C DTC_Taes_TAT1_BJ247168-1 Unspecified    (111)    297    235   2 *
+  402   13.2 14.7  7.2  Belalur:5424-6001    105   349  (229) + DTC_Tmon_TAT1_AF459088-1 Unspecified     7051   7312 (7258)   3  
+   21    6.7  0.0  0.0  Belalur:5424-6001    439   470  (108) + (CCGACC)n                Simple_repeat      1     32    (0)   4  
+   21   15.5  4.9  3.2  Belalur:5424-6001    500   560   (18) + (CCTC)n                  Simple_repeat      1     62    (0)   5  
+  638    9.8  0.0  0.0  Dic2:5370-5947      1    82  (496) C DTC_Hvul_Manor_RND-1     Unspecified    (922)   2480   2399   6  
+  267   15.2  6.7  1.6  Dic2:5370-5947     93   152  (426) C DTC_Taes_TAT1_BJ247168-1 Unspecified    (111)    297    235   7 *
+  402   13.2 14.7  7.2  Dic2:5370-5947    105   349  (229) + DTC_Tmon_TAT1_AF459088-1 Unspecified     7051   7312 (7258)   8  
+   21    6.7  0.0  0.0  Dic2:5370-5947    439   470  (108) + (CCGACC)n                Simple_repeat      1     32    (0)   9  
+   21   15.5  4.9  3.2  Dic2:5370-5947    500   560   (18) + (CCTC)n                  Simple_repeat      1     62    (0)  10  
+  638    9.8  0.0  0.0  Karur:5421-5998      1    82  (496) C DTC_Hvul_Manor_RND-1     Unspecified    (922)   2480   2399  11  
+  267   15.2  6.7  1.6  Karur:5421-5998     93   152  (426) C DTC_Taes_TAT1_BJ247168-1 Unspecified    (111)    297    235  12 *
+  402   13.2 14.7  7.2  Karur:5421-5998    105   349  (229) + DTC_Tmon_TAT1_AF459088-1 Unspecified     7051   7312 (7258)  13  
+   21    6.7  0.0  0.0  Karur:5421-5998    439   470  (108) + (CCGACC)n                Simple_repeat      1     32    (0)  14  
+   21   15.5  4.9  3.2  Karur:5421-5998    500   560   (18) + (CCTC)n                  Simple_repeat      1     62    (0)  15  
+  638    9.8  0.0  0.0  Lloyd:5318-5895      1    82  (496) C DTC_Hvul_Manor_RND-1     Unspecified    (922)   2480   2399  16  
+  267   15.2  6.7  1.6  Lloyd:5318-5895     93   152  (426) C DTC_Taes_TAT1_BJ247168-1 Unspecified    (111)    297    235  17 *
+  402   13.2 14.7  7.2  Lloyd:5318-5895    105   349  (229) + DTC_Tmon_TAT1_AF459088-1 Unspecified     7051   7312 (7258)  18  
+   21    6.7  0.0  0.0  Lloyd:5318-5895    439   470  (108) + (CCGACC)n                Simple_repeat      1     32    (0)  19  
+   21   15.5  4.9  3.2  Lloyd:5318-5895    500   560   (18) + (CCTC)n                  Simple_repeat      1     62    (0)  20  
+  638    9.8  0.0  0.0  Soldur:5420-5997      1    82  (496) C DTC_Hvul_Manor_RND-1     Unspecified    (922)   2480   2399  21  
+  267   15.2  6.7  1.6  Soldur:5420-5997     93   152  (426) C DTC_Taes_TAT1_BJ247168-1 Unspecified    (111)    297    235  22 *
+  402   14.2 14.3  7.1  Soldur:5420-5997    105   355  (223) + DTC_Tmon_TAT1_AF459088-1 Unspecified     7051   7318 (7252)  23  
+   21    6.7  0.0  0.0  Soldur:5420-5997    439   470  (108) + (CCGACC)n                Simple_repeat      1     32    (0)  24  
+   21   15.5  4.9  3.2  Soldur:5420-5997    500   560   (18) + (CCTC)n                  Simple_repeat      1     62    (0)  25  

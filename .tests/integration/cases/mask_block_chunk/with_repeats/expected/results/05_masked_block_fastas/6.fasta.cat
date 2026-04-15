@@ -1,0 +1,8 @@
+## RepeatMasker version 4.2.3 , default mode
+## run with rmblastn version 2.14.1+
+## RM Library: 
+## Total Sequences: 5
+## Total Length: 3445
+## Total NonMask ( excluding >20bp runs of N/X bases ): 3445
+## Total NonSub ( excluding all non ACGT bases ):3445
+## RAW Annotations:

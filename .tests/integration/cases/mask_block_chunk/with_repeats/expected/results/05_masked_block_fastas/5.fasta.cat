@@ -1,0 +1,518 @@
+## RepeatMasker version 4.2.3 , default mode
+## run with rmblastn version 2.14.1+
+## RM Library: 
+## Total Sequences: 5
+## Total Length: 2890
+## Total NonMask ( excluding >20bp runs of N/X bases ): 2890
+## Total NonSub ( excluding all non ACGT bases ):2890
+## RAW Annotations:
+638 9.76 0.00 0.00 Belalur:5424-6001 1 82 (496) C DTC_Hvul_Manor_RND-1 (922) 2480 2399 m_b1s001i0
+
+  Belalur:5424-          1 TAGAGTGGGTATCTTGGATTTTTCGAGGCAATGAGGCCTTTCTCTATCCG 50
+                                i       i               i  v    i       v    
+C DTC_Hvul_Mano       2480 TAGAGCGGGTATCCTGGATTTTTCGAGGCGATCAGGCTTTTCTCTCTCCG 2431
+
+  Belalur:5424-         51 CAACACATCATCATGAAGTCTCCTTAGATCGC 82
+                             i      i                      
+C DTC_Hvul_Mano       2430 CAGCACATCGTCATGAAGTCTCCTTAGATCGC 2399
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 6.79
+CpG sites = 6, Kimura (unadjusted) = 10.61
+Transitions / transversions = 3.00 (6/2)
+Gap_init rate = 0.00 (0 / 81), avg. gap size = 0.0 (0 / 0)
+
+267 15.24 6.67 1.59 Belalur:5424-6001 93 152 (426) C DTC_Taes_TAT1_BJ247168-1 (111) 297 235 m_b1s001i1
+
+  Belalur:5424-         93 TAAAAAAATAATAAAAAAACATTC--TAATGGCGTACCGCTCGGG--GGT 138
+                                             ? vii --  i     i  i-   v  --   
+C DTC_Taes_TAT1        297 TAAAAAAATAATAAAAAANCCCCCATTAGTGGCGCACT-CTCTGGCAGGT 249
+
+  Belalur:5424-        139 GCGCCATTAGTAAT 152
+                                    v  i 
+C DTC_Taes_TAT1        248 GCGCCATTACTAGT 235
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 17.69
+CpG sites = 6, Kimura (unadjusted) = 17.69
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.05 (3 / 59), avg. gap size = 1.67 (5 / 3)
+
+402 13.20 14.69 7.25 Belalur:5424-6001 105 349 (229) DTC_Tmon_TAT1_AF459088-1 7051 7312 (7258) m_b1s001i2
+
+  Belalur:5424-        105 AAAAAAACATTCTAATGGCGTACCGCTCGGGGGTGCGCCATTAGTAATCT 154
+                                               i     iv                      
+  DTC_Tmon_TAT1       7051 AAAAAAACATTCTAATGGCGCACCGCCAGGGGGTGCGCCATTAGTAATCT 7100
+
+  Belalur:5424-        155 TCCCCC---TAGCTCCAACTCGTCCGACCCCTTCGTCCTTCCCTCTCGCC 201
+                                 ---     --- v   i    i          i   --      
+  DTC_Tmon_TAT1       7101 TCCCCCCTATAGCT---AGTCGCCCGATCCCTTCGTCCCTCC--CTCGCC 7145
+
+  Belalur:5424-        202 AGATCCAGTCCCCCC--------CCC-----CCCCCCCCGCGCGCTGCCC 238
+                                  v   i   --------   -----     i  viv   i  i 
+  DTC_Tmon_TAT1       7146 AGATCCACTCCTCCCTCGCCACACCCTCACGCCCCCTCCTTCCGCCGCTC 7195
+
+  Belalur:5424-        239 CGA-----CCCACGACGCCGC--CGCC-CCTACGT--GCGCCACC----G 274
+                              -----      - v    --    -i   v  --v    i  ---- 
+  DTC_Tmon_TAT1       7196 CGACGACTCCCACG-CCCCGCCTCGCCGTCTAGGTCCTCGCCGCCAACGG 7244
+
+  Belalur:5424-        275 C---CCCCGCGCC--CCCACCACTGCAGCTCGCCATCGCCGACACCTCCG 319
+                            ---      v  --   v     -----i v v     -----    iv
+  DTC_Tmon_TAT1       7245 CCTGCCCCGCTCCTTCCCTCCACT-----CCTCAATCGC-----CCTCTC 7284
+
+  Belalur:5424-        320 CGACCTCGCCGTCGCCGACAGCCT-CCCCGC 349
+                           v v      ---       i    -      
+  DTC_Tmon_TAT1       7285 GGTCCTCGC---CGCCGACGGCCTGCCCCGC 7312
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 13.19
+CpG sites = 15, Kimura (unadjusted) = 14.66
+Transitions / transversions = 1.00 (15/15)
+Gap_init rate = 0.12 (30 / 244), avg. gap size = 1.83 (55 / 30)
+
+21 6.68 0.00 0.00 Belalur:5424-6001 439 470 (108) (CCGACC)n#Simple_repeat 1 32 (0) m_b1s252i12
+
+  Belalur:5424-        439 CCGACCCCAACCCCAACCCCGACCCCGACCCC 470
+                                   i     i                 
+  (CCGACC)n#Sim          1 CCGACCCCGACCCCGACCCCGACCCCGACCCC 32
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (2/0)
+Gap_init rate = 0.00 (0 / 31), avg. gap size = 0.0 (0 / 0)
+
+21 15.51 4.92 3.23 Belalur:5424-6001 500 560 (18) (CCTC)n#Simple_repeat 1 62 (0) m_b1s252i13
+
+  Belalur:5424-        500 CCTCTCCT-CCTTCCT-CCTTCGTCCCTCTCCACCCTTCCTCCC-CATTC 546
+                               -   -   i   -   i v      -  v    i      - vi  
+  (CCTC)n#Simpl          1 CCTC-CCTCCCTCCCTCCCTCCCTCCCTC-CCTCCCTCCCTCCCTCCCTC 48
+
+  Belalur:5424-        547 CATCCCTCCCTCCC 560
+                            v            
+  (CCTC)n#Simpl         49 CCTCCCTCCCTCCC 62
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (4/4)
+Gap_init rate = 0.08 (5 / 60), avg. gap size = 1.00 (5 / 5)
+
+19 19.03 1.67 5.17 Belalur:5424-6001 500 559 (19) (CCTTCCT)n#Simple_repeat 1 58 (0) m_b1s252i14
+
+  Belalur:5424-        500 CCTCTCCTCCTTCCTCCTTCGTCCCT-CTCCACCCTTCCTCCCCATTCCA 548
+                              -                v   i -    vi   i i   i v    -
+  (CCTTCCT)n#Si          1 CCT-TCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCC- 48
+
+  Belalur:5424-        549 TCCCTCCCTCC 559
+                            -   i     
+  (CCTTCCT)n#Si         49 T-CCTTCCTCC 58
+
+Matrix = Unknown
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.07 (4 / 59), avg. gap size = 1.00 (4 / 4)
+
+638 9.76 0.00 0.00 Dic2:5370-5947 1 82 (496) C DTC_Hvul_Manor_RND-1 (922) 2480 2399 m_b1s001i3
+
+  Dic2:5370-594          1 TAGAGTGGGTATCTTGGATTTTTCGAGGCAATGAGGCCTTTCTCTATCCG 50
+                                i       i               i  v    i       v    
+C DTC_Hvul_Mano       2480 TAGAGCGGGTATCCTGGATTTTTCGAGGCGATCAGGCTTTTCTCTCTCCG 2431
+
+  Dic2:5370-594         51 CAACACATCATCATGAAGTCTCCTTAGATCGC 82
+                             i      i                      
+C DTC_Hvul_Mano       2430 CAGCACATCGTCATGAAGTCTCCTTAGATCGC 2399
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 6.79
+CpG sites = 6, Kimura (unadjusted) = 10.61
+Transitions / transversions = 3.00 (6/2)
+Gap_init rate = 0.00 (0 / 81), avg. gap size = 0.0 (0 / 0)
+
+267 15.24 6.67 1.59 Dic2:5370-5947 93 152 (426) C DTC_Taes_TAT1_BJ247168-1 (111) 297 235 m_b1s001i4
+
+  Dic2:5370-594         93 TAAAAAAATAATAAAAAAACATTC--TAATGGCGTACCGCTCGGG--GGT 138
+                                             ? vii --  i     i  i-   v  --   
+C DTC_Taes_TAT1        297 TAAAAAAATAATAAAAAANCCCCCATTAGTGGCGCACT-CTCTGGCAGGT 249
+
+  Dic2:5370-594        139 GCGCCATTAGTAAT 152
+                                    v  i 
+C DTC_Taes_TAT1        248 GCGCCATTACTAGT 235
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 17.69
+CpG sites = 6, Kimura (unadjusted) = 17.69
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.05 (3 / 59), avg. gap size = 1.67 (5 / 3)
+
+402 13.20 14.69 7.25 Dic2:5370-5947 105 349 (229) DTC_Tmon_TAT1_AF459088-1 7051 7312 (7258) m_b1s001i5
+
+  Dic2:5370-594        105 AAAAAAACATTCTAATGGCGTACCGCTCGGGGGTGCGCCATTAGTAATCT 154
+                                               i     iv                      
+  DTC_Tmon_TAT1       7051 AAAAAAACATTCTAATGGCGCACCGCCAGGGGGTGCGCCATTAGTAATCT 7100
+
+  Dic2:5370-594        155 TCCCCC---TAGCTCCAACTCGTCCGACCCCTTCGTCCTTCCCTCTCGCC 201
+                                 ---     --- v   i    i          i   --      
+  DTC_Tmon_TAT1       7101 TCCCCCCTATAGCT---AGTCGCCCGATCCCTTCGTCCCTCC--CTCGCC 7145
+
+  Dic2:5370-594        202 AGATCCAGTCCCCCC--------CCC-----CCCCCCCCGCGCGCTGCCC 238
+                                  v   i   --------   -----     i  viv   i  i 
+  DTC_Tmon_TAT1       7146 AGATCCACTCCTCCCTCGCCACACCCTCACGCCCCCTCCTTCCGCCGCTC 7195
+
+  Dic2:5370-594        239 CGA-----CCCACGACGCCGC--CGCC-CCTACGT--GCGCCACC----G 274
+                              -----      - v    --    -i   v  --v    i  ---- 
+  DTC_Tmon_TAT1       7196 CGACGACTCCCACG-CCCCGCCTCGCCGTCTAGGTCCTCGCCGCCAACGG 7244
+
+  Dic2:5370-594        275 C---CCCCGCGCC--CCCACCACTGCAGCTCGCCATCGCCGACACCTCCG 319
+                            ---      v  --   v     -----i v v     -----    iv
+  DTC_Tmon_TAT1       7245 CCTGCCCCGCTCCTTCCCTCCACT-----CCTCAATCGC-----CCTCTC 7284
+
+  Dic2:5370-594        320 CGACCTCGCCGTCGCCGACAGCCT-CCCCGC 349
+                           v v      ---       i    -      
+  DTC_Tmon_TAT1       7285 GGTCCTCGC---CGCCGACGGCCTGCCCCGC 7312
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 13.19
+CpG sites = 15, Kimura (unadjusted) = 14.66
+Transitions / transversions = 1.00 (15/15)
+Gap_init rate = 0.12 (30 / 244), avg. gap size = 1.83 (55 / 30)
+
+21 6.68 0.00 0.00 Dic2:5370-5947 439 470 (108) (CCGACC)n#Simple_repeat 1 32 (0) m_b1s252i9
+
+  Dic2:5370-594        439 CCGACCCCAACCCCAACCCCGACCCCGACCCC 470
+                                   i     i                 
+  (CCGACC)n#Sim          1 CCGACCCCGACCCCGACCCCGACCCCGACCCC 32
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (2/0)
+Gap_init rate = 0.00 (0 / 31), avg. gap size = 0.0 (0 / 0)
+
+21 15.51 4.92 3.23 Dic2:5370-5947 500 560 (18) (CCTC)n#Simple_repeat 1 62 (0) m_b1s252i10
+
+  Dic2:5370-594        500 CCTCTCCT-CCTTCCT-CCTTCGTCCCTCTCCACCCTTCCTCCC-CATTC 546
+                               -   -   i   -   i v      -  v    i      - vi  
+  (CCTC)n#Simpl          1 CCTC-CCTCCCTCCCTCCCTCCCTCCCTC-CCTCCCTCCCTCCCTCCCTC 48
+
+  Dic2:5370-594        547 CATCCCTCCCTCCC 560
+                            v            
+  (CCTC)n#Simpl         49 CCTCCCTCCCTCCC 62
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (4/4)
+Gap_init rate = 0.08 (5 / 60), avg. gap size = 1.00 (5 / 5)
+
+19 19.03 1.67 5.17 Dic2:5370-5947 500 559 (19) (CCTTCCT)n#Simple_repeat 1 58 (0) m_b1s252i11
+
+  Dic2:5370-594        500 CCTCTCCTCCTTCCTCCTTCGTCCCT-CTCCACCCTTCCTCCCCATTCCA 548
+                              -                v   i -    vi   i i   i v    -
+  (CCTTCCT)n#Si          1 CCT-TCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCC- 48
+
+  Dic2:5370-594        549 TCCCTCCCTCC 559
+                            -   i     
+  (CCTTCCT)n#Si         49 T-CCTTCCTCC 58
+
+Matrix = Unknown
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.07 (4 / 59), avg. gap size = 1.00 (4 / 4)
+
+638 9.76 0.00 0.00 Karur:5421-5998 1 82 (496) C DTC_Hvul_Manor_RND-1 (922) 2480 2399 m_b1s001i6
+
+  Karur:5421-59          1 TAGAGTGGGTATCTTGGATTTTTCGAGGCAATGAGGCCTTTCTCTATCCG 50
+                                i       i               i  v    i       v    
+C DTC_Hvul_Mano       2480 TAGAGCGGGTATCCTGGATTTTTCGAGGCGATCAGGCTTTTCTCTCTCCG 2431
+
+  Karur:5421-59         51 CAACACATCATCATGAAGTCTCCTTAGATCGC 82
+                             i      i                      
+C DTC_Hvul_Mano       2430 CAGCACATCGTCATGAAGTCTCCTTAGATCGC 2399
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 6.79
+CpG sites = 6, Kimura (unadjusted) = 10.61
+Transitions / transversions = 3.00 (6/2)
+Gap_init rate = 0.00 (0 / 81), avg. gap size = 0.0 (0 / 0)
+
+267 15.24 6.67 1.59 Karur:5421-5998 93 152 (426) C DTC_Taes_TAT1_BJ247168-1 (111) 297 235 m_b1s001i7
+
+  Karur:5421-59         93 TAAAAAAATAATAAAAAAACATTC--TAATGGCGTACCGCTCGGG--GGT 138
+                                             ? vii --  i     i  i-   v  --   
+C DTC_Taes_TAT1        297 TAAAAAAATAATAAAAAANCCCCCATTAGTGGCGCACT-CTCTGGCAGGT 249
+
+  Karur:5421-59        139 GCGCCATTAGTAAT 152
+                                    v  i 
+C DTC_Taes_TAT1        248 GCGCCATTACTAGT 235
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 17.69
+CpG sites = 6, Kimura (unadjusted) = 17.69
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.05 (3 / 59), avg. gap size = 1.67 (5 / 3)
+
+402 13.20 14.69 7.25 Karur:5421-5998 105 349 (229) DTC_Tmon_TAT1_AF459088-1 7051 7312 (7258) m_b1s001i8
+
+  Karur:5421-59        105 AAAAAAACATTCTAATGGCGTACCGCTCGGGGGTGCGCCATTAGTAATCT 154
+                                               i     iv                      
+  DTC_Tmon_TAT1       7051 AAAAAAACATTCTAATGGCGCACCGCCAGGGGGTGCGCCATTAGTAATCT 7100
+
+  Karur:5421-59        155 TCCCCC---TAGCTCCAACTCGTCCGACCCCTTCGTCCTTCCCTCTCGCC 201
+                                 ---     --- v   i    i          i   --      
+  DTC_Tmon_TAT1       7101 TCCCCCCTATAGCT---AGTCGCCCGATCCCTTCGTCCCTCC--CTCGCC 7145
+
+  Karur:5421-59        202 AGATCCAGTCCCCCC--------CCC-----CCCCCCCCGCGCGCTGCCC 238
+                                  v   i   --------   -----     i  viv   i  i 
+  DTC_Tmon_TAT1       7146 AGATCCACTCCTCCCTCGCCACACCCTCACGCCCCCTCCTTCCGCCGCTC 7195
+
+  Karur:5421-59        239 CGA-----CCCACGACGCCGC--CGCC-CCTACGT--GCGCCACC----G 274
+                              -----      - v    --    -i   v  --v    i  ---- 
+  DTC_Tmon_TAT1       7196 CGACGACTCCCACG-CCCCGCCTCGCCGTCTAGGTCCTCGCCGCCAACGG 7244
+
+  Karur:5421-59        275 C---CCCCGCGCC--CCCACCACTGCAGCTCGCCATCGCCGACACCTCCG 319
+                            ---      v  --   v     -----i v v     -----    iv
+  DTC_Tmon_TAT1       7245 CCTGCCCCGCTCCTTCCCTCCACT-----CCTCAATCGC-----CCTCTC 7284
+
+  Karur:5421-59        320 CGACCTCGCCGTCGCCGACAGCCT-CCCCGC 349
+                           v v      ---       i    -      
+  DTC_Tmon_TAT1       7285 GGTCCTCGC---CGCCGACGGCCTGCCCCGC 7312
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 13.19
+CpG sites = 15, Kimura (unadjusted) = 14.66
+Transitions / transversions = 1.00 (15/15)
+Gap_init rate = 0.12 (30 / 244), avg. gap size = 1.83 (55 / 30)
+
+21 6.68 0.00 0.00 Karur:5421-5998 439 470 (108) (CCGACC)n#Simple_repeat 1 32 (0) m_b1s252i6
+
+  Karur:5421-59        439 CCGACCCCAACCCCAACCCCGACCCCGACCCC 470
+                                   i     i                 
+  (CCGACC)n#Sim          1 CCGACCCCGACCCCGACCCCGACCCCGACCCC 32
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (2/0)
+Gap_init rate = 0.00 (0 / 31), avg. gap size = 0.0 (0 / 0)
+
+21 15.51 4.92 3.23 Karur:5421-5998 500 560 (18) (CCTC)n#Simple_repeat 1 62 (0) m_b1s252i7
+
+  Karur:5421-59        500 CCTCTCCT-CCTTCCT-CCTTCGTCCCTCTCCACCCTTCCTCCC-CATTC 546
+                               -   -   i   -   i v      -  v    i      - vi  
+  (CCTC)n#Simpl          1 CCTC-CCTCCCTCCCTCCCTCCCTCCCTC-CCTCCCTCCCTCCCTCCCTC 48
+
+  Karur:5421-59        547 CATCCCTCCCTCCC 560
+                            v            
+  (CCTC)n#Simpl         49 CCTCCCTCCCTCCC 62
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (4/4)
+Gap_init rate = 0.08 (5 / 60), avg. gap size = 1.00 (5 / 5)
+
+19 19.03 1.67 5.17 Karur:5421-5998 500 559 (19) (CCTTCCT)n#Simple_repeat 1 58 (0) m_b1s252i8
+
+  Karur:5421-59        500 CCTCTCCTCCTTCCTCCTTCGTCCCT-CTCCACCCTTCCTCCCCATTCCA 548
+                              -                v   i -    vi   i i   i v    -
+  (CCTTCCT)n#Si          1 CCT-TCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCC- 48
+
+  Karur:5421-59        549 TCCCTCCCTCC 559
+                            -   i     
+  (CCTTCCT)n#Si         49 T-CCTTCCTCC 58
+
+Matrix = Unknown
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.07 (4 / 59), avg. gap size = 1.00 (4 / 4)
+
+638 9.76 0.00 0.00 Lloyd:5318-5895 1 82 (496) C DTC_Hvul_Manor_RND-1 (922) 2480 2399 m_b1s001i9
+
+  Lloyd:5318-58          1 TAGAGTGGGTATCTTGGATTTTTCGAGGCAATGAGGCCTTTCTCTATCCG 50
+                                i       i               i  v    i       v    
+C DTC_Hvul_Mano       2480 TAGAGCGGGTATCCTGGATTTTTCGAGGCGATCAGGCTTTTCTCTCTCCG 2431
+
+  Lloyd:5318-58         51 CAACACATCATCATGAAGTCTCCTTAGATCGC 82
+                             i      i                      
+C DTC_Hvul_Mano       2430 CAGCACATCGTCATGAAGTCTCCTTAGATCGC 2399
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 6.79
+CpG sites = 6, Kimura (unadjusted) = 10.61
+Transitions / transversions = 3.00 (6/2)
+Gap_init rate = 0.00 (0 / 81), avg. gap size = 0.0 (0 / 0)
+
+267 15.24 6.67 1.59 Lloyd:5318-5895 93 152 (426) C DTC_Taes_TAT1_BJ247168-1 (111) 297 235 m_b1s001i10
+
+  Lloyd:5318-58         93 TAAAAAAATAATAAAAAAACATTC--TAATGGCGTACCGCTCGGG--GGT 138
+                                             ? vii --  i     i  i-   v  --   
+C DTC_Taes_TAT1        297 TAAAAAAATAATAAAAAANCCCCCATTAGTGGCGCACT-CTCTGGCAGGT 249
+
+  Lloyd:5318-58        139 GCGCCATTAGTAAT 152
+                                    v  i 
+C DTC_Taes_TAT1        248 GCGCCATTACTAGT 235
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 17.69
+CpG sites = 6, Kimura (unadjusted) = 17.69
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.05 (3 / 59), avg. gap size = 1.67 (5 / 3)
+
+402 13.20 14.69 7.25 Lloyd:5318-5895 105 349 (229) DTC_Tmon_TAT1_AF459088-1 7051 7312 (7258) m_b1s001i11
+
+  Lloyd:5318-58        105 AAAAAAACATTCTAATGGCGTACCGCTCGGGGGTGCGCCATTAGTAATCT 154
+                                               i     iv                      
+  DTC_Tmon_TAT1       7051 AAAAAAACATTCTAATGGCGCACCGCCAGGGGGTGCGCCATTAGTAATCT 7100
+
+  Lloyd:5318-58        155 TCCCCC---TAGCTCCAACTCGTCCGACCCCTTCGTCCTTCCCTCTCGCC 201
+                                 ---     --- v   i    i          i   --      
+  DTC_Tmon_TAT1       7101 TCCCCCCTATAGCT---AGTCGCCCGATCCCTTCGTCCCTCC--CTCGCC 7145
+
+  Lloyd:5318-58        202 AGATCCAGTCCCCCC--------CCC-----CCCCCCCCGCGCGCTGCCC 238
+                                  v   i   --------   -----     i  viv   i  i 
+  DTC_Tmon_TAT1       7146 AGATCCACTCCTCCCTCGCCACACCCTCACGCCCCCTCCTTCCGCCGCTC 7195
+
+  Lloyd:5318-58        239 CGA-----CCCACGACGCCGC--CGCC-CCTACGT--GCGCCACC----G 274
+                              -----      - v    --    -i   v  --v    i  ---- 
+  DTC_Tmon_TAT1       7196 CGACGACTCCCACG-CCCCGCCTCGCCGTCTAGGTCCTCGCCGCCAACGG 7244
+
+  Lloyd:5318-58        275 C---CCCCGCGCC--CCCACCACTGCAGCTCGCCATCGCCGACACCTCCG 319
+                            ---      v  --   v     -----i v v     -----    iv
+  DTC_Tmon_TAT1       7245 CCTGCCCCGCTCCTTCCCTCCACT-----CCTCAATCGC-----CCTCTC 7284
+
+  Lloyd:5318-58        320 CGACCTCGCCGTCGCCGACAGCCT-CCCCGC 349
+                           v v      ---       i    -      
+  DTC_Tmon_TAT1       7285 GGTCCTCGC---CGCCGACGGCCTGCCCCGC 7312
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 13.19
+CpG sites = 15, Kimura (unadjusted) = 14.66
+Transitions / transversions = 1.00 (15/15)
+Gap_init rate = 0.12 (30 / 244), avg. gap size = 1.83 (55 / 30)
+
+21 6.68 0.00 0.00 Lloyd:5318-5895 439 470 (108) (CCGACC)n#Simple_repeat 1 32 (0) m_b1s252i3
+
+  Lloyd:5318-58        439 CCGACCCCAACCCCAACCCCGACCCCGACCCC 470
+                                   i     i                 
+  (CCGACC)n#Sim          1 CCGACCCCGACCCCGACCCCGACCCCGACCCC 32
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (2/0)
+Gap_init rate = 0.00 (0 / 31), avg. gap size = 0.0 (0 / 0)
+
+21 15.51 4.92 3.23 Lloyd:5318-5895 500 560 (18) (CCTC)n#Simple_repeat 1 62 (0) m_b1s252i4
+
+  Lloyd:5318-58        500 CCTCTCCT-CCTTCCT-CCTTCGTCCCTCTCCACCCTTCCTCCC-CATTC 546
+                               -   -   i   -   i v      -  v    i      - vi  
+  (CCTC)n#Simpl          1 CCTC-CCTCCCTCCCTCCCTCCCTCCCTC-CCTCCCTCCCTCCCTCCCTC 48
+
+  Lloyd:5318-58        547 CATCCCTCCCTCCC 560
+                            v            
+  (CCTC)n#Simpl         49 CCTCCCTCCCTCCC 62
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (4/4)
+Gap_init rate = 0.08 (5 / 60), avg. gap size = 1.00 (5 / 5)
+
+19 19.03 1.67 5.17 Lloyd:5318-5895 500 559 (19) (CCTTCCT)n#Simple_repeat 1 58 (0) m_b1s252i5
+
+  Lloyd:5318-58        500 CCTCTCCTCCTTCCTCCTTCGTCCCT-CTCCACCCTTCCTCCCCATTCCA 548
+                              -                v   i -    vi   i i   i v    -
+  (CCTTCCT)n#Si          1 CCT-TCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCC- 48
+
+  Lloyd:5318-58        549 TCCCTCCCTCC 559
+                            -   i     
+  (CCTTCCT)n#Si         49 T-CCTTCCTCC 58
+
+Matrix = Unknown
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.07 (4 / 59), avg. gap size = 1.00 (4 / 4)
+
+638 9.76 0.00 0.00 Soldur:5420-5997 1 82 (496) C DTC_Hvul_Manor_RND-1 (922) 2480 2399 m_b1s001i12
+
+  Soldur:5420-5          1 TAGAGTGGGTATCTTGGATTTTTCGAGGCAATGAGGCCTTTCTCTATCCG 50
+                                i       i               i  v    i       v    
+C DTC_Hvul_Mano       2480 TAGAGCGGGTATCCTGGATTTTTCGAGGCGATCAGGCTTTTCTCTCTCCG 2431
+
+  Soldur:5420-5         51 CAACACATCATCATGAAGTCTCCTTAGATCGC 82
+                             i      i                      
+C DTC_Hvul_Mano       2430 CAGCACATCGTCATGAAGTCTCCTTAGATCGC 2399
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 6.79
+CpG sites = 6, Kimura (unadjusted) = 10.61
+Transitions / transversions = 3.00 (6/2)
+Gap_init rate = 0.00 (0 / 81), avg. gap size = 0.0 (0 / 0)
+
+267 15.24 6.67 1.59 Soldur:5420-5997 93 152 (426) C DTC_Taes_TAT1_BJ247168-1 (111) 297 235 m_b1s001i13
+
+  Soldur:5420-5         93 TAAAAAAATAATAAAAAAACATTC--TAATGGCGTACCGCTCGGG--GGT 138
+                                             ? vii --  i     i  i-   v  --   
+C DTC_Taes_TAT1        297 TAAAAAAATAATAAAAAANCCCCCATTAGTGGCGCACT-CTCTGGCAGGT 249
+
+  Soldur:5420-5        139 GCGCCATTAGTAAT 152
+                                    v  i 
+C DTC_Taes_TAT1        248 GCGCCATTACTAGT 235
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 17.69
+CpG sites = 6, Kimura (unadjusted) = 17.69
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.05 (3 / 59), avg. gap size = 1.67 (5 / 3)
+
+402 14.15 14.34 7.09 Soldur:5420-5997 105 355 (223) DTC_Tmon_TAT1_AF459088-1 7051 7318 (7252) m_b1s001i14
+
+  Soldur:5420-5        105 AAAAAAACATTCTAATGGCGTACCGCTCGGGGGTGCGCCATTAGTAATCT 154
+                                               i     iv                      
+  DTC_Tmon_TAT1       7051 AAAAAAACATTCTAATGGCGCACCGCCAGGGGGTGCGCCATTAGTAATCT 7100
+
+  Soldur:5420-5        155 TCCCCC---TAGCTCCAACTCGTCCGACCCCTTCGTCCTTCCCTCTCGCC 201
+                                 ---     --- v   i    i          i   --      
+  DTC_Tmon_TAT1       7101 TCCCCCCTATAGCT---AGTCGCCCGATCCCTTCGTCCCTCC--CTCGCC 7145
+
+  Soldur:5420-5        202 AGATCCAGTCCCCCC--------CCC-----CCCCCCCCGCGCGCTGCCC 238
+                                  v   i   --------   -----     i  viv   i  i 
+  DTC_Tmon_TAT1       7146 AGATCCACTCCTCCCTCGCCACACCCTCACGCCCCCTCCTTCCGCCGCTC 7195
+
+  Soldur:5420-5        239 CGA-----CCCACGACGCCGC--CGCC-CCTACGT--GCGCCACC----G 274
+                              -----      - v    --    -i   v  --v    i  ---- 
+  DTC_Tmon_TAT1       7196 CGACGACTCCCACG-CCCCGCCTCGCCGTCTAGGTCCTCGCCGCCAACGG 7244
+
+  Soldur:5420-5        275 C---CCCCGCGCC--CCCACCACTGCAGCTCGCCATCGCCGACACCTCCG 319
+                            ---      v  --   v     -----i v v     -----    iv
+  DTC_Tmon_TAT1       7245 CCTGCCCCGCTCCTTCCCTCCACT-----CCTCAATCGC-----CCTCTC 7284
+
+  Soldur:5420-5        320 CGACCTCGCCGTCGCCGACAGCCT-CCCCGCGTCAGC 355
+                           v v      ---       i    -      vi  i 
+  DTC_Tmon_TAT1       7285 GGTCCTCGC---CGCCGACGGCCTGCCCCGCTCCAAC 7318
+
+Matrix = 20p43g.matrix
+Kimura (with divCpGMod) = 14.39
+CpG sites = 17, Kimura (unadjusted) = 15.85
+Transitions / transversions = 1.06 (17/16)
+Gap_init rate = 0.12 (30 / 250), avg. gap size = 1.83 (55 / 30)
+
+21 6.68 0.00 0.00 Soldur:5420-5997 439 470 (108) (CCGACC)n#Simple_repeat 1 32 (0) m_b1s252i0
+
+  Soldur:5420-5        439 CCGACCCCAACCCCAACCCCGACCCCGACCCC 470
+                                   i     i                 
+  (CCGACC)n#Sim          1 CCGACCCCGACCCCGACCCCGACCCCGACCCC 32
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (2/0)
+Gap_init rate = 0.00 (0 / 31), avg. gap size = 0.0 (0 / 0)
+
+21 15.51 4.92 3.23 Soldur:5420-5997 500 560 (18) (CCTC)n#Simple_repeat 1 62 (0) m_b1s252i1
+
+  Soldur:5420-5        500 CCTCTCCT-CCTTCCT-CCTTCGTCCCTCTCCACCCTTCCTCCC-CATTC 546
+                               -   -   i   -   i v      -  v    i      - vi  
+  (CCTC)n#Simpl          1 CCTC-CCTCCCTCCCTCCCTCCCTCCCTC-CCTCCCTCCCTCCCTCCCTC 48
+
+  Soldur:5420-5        547 CATCCCTCCCTCCC 560
+                            v            
+  (CCTC)n#Simpl         49 CCTCCCTCCCTCCC 62
+
+Matrix = Unknown
+Transitions / transversions = 1.00 (4/4)
+Gap_init rate = 0.08 (5 / 60), avg. gap size = 1.00 (5 / 5)
+
+19 19.03 1.67 5.17 Soldur:5420-5997 500 559 (19) (CCTTCCT)n#Simple_repeat 1 58 (0) m_b1s252i2
+
+  Soldur:5420-5        500 CCTCTCCTCCTTCCTCCTTCGTCCCT-CTCCACCCTTCCTCCCCATTCCA 548
+                              -                v   i -    vi   i i   i v    -
+  (CCTTCCT)n#Si          1 CCT-TCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCCTCCTTCC- 48
+
+  Soldur:5420-5        549 TCCCTCCCTCC 559
+                            -   i     
+  (CCTTCCT)n#Si         49 T-CCTTCCTCC 58
+
+Matrix = Unknown
+Transitions / transversions = 2.00 (6/3)
+Gap_init rate = 0.07 (4 / 59), avg. gap size = 1.00 (4 / 4)
+

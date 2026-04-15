@@ -23,4 +23,4 @@ snp_group_filtering:
     - Soldur
 
 batching:
-  blocks_per_job: 1
+  blocks_per_job: 2

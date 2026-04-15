@@ -19,3 +19,6 @@ snp_detection:
 snp_group_filtering:
   group_a: []
   group_b: []
+
+batching:
+  blocks_per_job: ""
