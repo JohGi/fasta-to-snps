@@ -45,6 +45,5 @@ class RegionOverviewBuilder:
             snps_by_sample=snps_by_sample,
         )
         region_data = build_region_payload(sample_data)
-        config = build_config_payload()
         html = build_html(region_data)
         write_html(html, self.output_path)

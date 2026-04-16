@@ -10,6 +10,7 @@ import json
 from .constants import SIDEBAR_WIDTH
 from .payload import build_config_payload
 
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,8 +66,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       width: 100%%;
     }
 
-    .viewer {
+    .viewer-column {
       flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .viewer-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .viewer-toolbar button {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .viewer-toolbar button:hover {
+      background: #f5f5f5;
+    }
+
+    .viewer {
+      width: 100%%;
       min-width: 0;
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -129,7 +158,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </section>
 
     <div class="content-row">
-      <div id="viewer" class="viewer"></div>
+      <div class="viewer-column">
+        <div class="viewer-toolbar">
+          <button id="zoom-out" type="button">−</button>
+          <button id="zoom-in" type="button">+</button>
+          <button id="zoom-reset" type="button">Reset</button>
+        </div>
+        <div id="viewer" class="viewer"></div>
+      </div>
 
       <aside id="sidebar" class="sidebar">
         <h2>Hovered feature</h2>
@@ -146,7 +182,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       hoveredFeatureId: null,
       hoveredFeatureType: null,
       featureGroups: new Map(),
-      highlightNodes: new Map()
+      highlightNodes: new Map(),
+      zoomX: 1
     };
 
     function buildFeatureGroups(data) {
@@ -156,7 +193,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         for (const block of sample.blocks) {
           const entry = {
             sample: sample.sample,
-            featureType: 'block',
+            featureType: "block",
             featureId: block.feature_id,
             info: {
               sample: sample.sample,
@@ -176,7 +213,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         for (const snp of sample.snps) {
           const entry = {
             sample: sample.sample,
-            featureType: 'snp',
+            featureType: "snp",
             featureId: snp.feature_id,
             info: {
               sample: sample.sample,
@@ -200,7 +237,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function renderSidebarDefault() {
-      const sidebar = document.getElementById('sidebar');
+      const sidebar = document.getElementById("sidebar");
       sidebar.innerHTML = `
         <h2>Hovered feature</h2>
         <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
@@ -208,7 +245,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function renderFeatureSidebar(featureType, featureId) {
-      const sidebar = document.getElementById('sidebar');
+      const sidebar = document.getElementById("sidebar");
       const entries = state.featureGroups.get(featureId) || [];
 
       if (entries.length === 0) {
@@ -216,9 +253,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         return;
       }
 
-      const kind = featureType === 'snp' ? 'SNP' : 'Collinear block';
+      const kind = featureType === "snp" ? "SNP" : "Collinear block";
       const firstInfo = entries[0].info;
-      const title = featureType === 'snp'
+      const title = featureType === "snp"
         ? `${firstInfo.block_id}:${firstInfo.aln_pos}`
         : `${firstInfo.block_id}`;
 
@@ -232,7 +269,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           html += `<p class="hint">No corresponding feature in this sample.</p>`;
         } else {
           html += '<div class="kv">';
-          const hiddenKeys = new Set(['sample', 'block_id', 'aln_pos', 'pos_in_block']);
+          const hiddenKeys = new Set(["sample", "block_id", "aln_pos", "pos_in_block"]);
 
           for (const [key, value] of Object.entries(entry.info)) {
             if (hiddenKeys.has(key)) {
@@ -241,10 +278,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             html += `<div class="key">${escapeHtml(key)}</div><div>${escapeHtml(String(value))}</div>`;
           }
 
-          html += '</div>';
+          html += "</div>";
         }
 
-        html += '</div>';
+        html += "</div>";
       }
 
       sidebar.innerHTML = html;
@@ -252,9 +289,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function escapeHtml(text) {
       return String(text)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;');
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
     }
 
     function setHighlight(featureType, featureId) {
@@ -292,20 +329,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function attachInteraction(node, featureType, featureId) {
-      node.on('mouseenter', () => {
-        document.body.style.cursor = 'pointer';
+      node.on("mouseenter", () => {
+        document.body.style.cursor = "pointer";
         setHighlight(featureType, featureId);
       });
 
-      node.on('mouseleave', () => {
-        document.body.style.cursor = 'default';
+      node.on("mouseleave", () => {
+        document.body.style.cursor = "default";
         clearHighlight();
       });
     }
 
-    function getStageWidth() {
-      const viewerElement = document.getElementById('viewer');
+    function getBaseViewerWidth() {
+      const viewerElement = document.getElementById("viewer");
       return Math.max(CONFIG.minWidth, viewerElement.clientWidth);
+    }
+
+    function getStageWidth() {
+      return getBaseViewerWidth() * state.zoomX;
     }
 
     function computeTrackWidth() {
@@ -344,7 +385,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       const axis = new Konva.Line({
         points: [x0, axisY, x1, axisY],
-        stroke: '#444444',
+        stroke: "#444444",
         strokeWidth: 1,
         listening: false
       });
@@ -357,7 +398,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         const tick = new Konva.Line({
           points: [x, axisY, x, axisY + 6],
-          stroke: '#444444',
+          stroke: "#444444",
           strokeWidth: 1,
           listening: false
         });
@@ -368,8 +409,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           width: 60,
           text: formatBp(value),
           fontSize: 10,
-          fill: '#555555',
-          align: 'center',
+          fill: "#555555",
+          align: "center",
           listening: false
         });
 
@@ -385,8 +426,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         width: CONFIG.leftMargin - 20,
         text: sampleName,
         fontSize: 16,
-        fontStyle: 'bold',
-        fill: '#222222',
+        fontStyle: "bold",
+        fill: "#222222",
         listening: false
       });
       layer.add(label);
@@ -403,7 +444,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         y: y0,
         width: width,
         height: CONFIG.trackHeight,
-        stroke: 'black',
+        stroke: "black",
         strokeWidth: 1,
         listening: false
       });
@@ -444,7 +485,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         y: y0,
         width: Math.max(6, x1 - x0),
         height: CONFIG.trackHeight,
-        fill: 'rgba(0,0,0,0)'
+        fill: "rgba(0,0,0,0)"
       });
     }
 
@@ -459,7 +500,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         width: Math.max(1, x1 - x0),
         height: CONFIG.featureHeight,
         stroke: CONFIG.highlightColor,
-        strokeWidth: 2,
+        strokeWidth: 1.5,
         visible: false,
         listening: false
       });
@@ -487,7 +528,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         y: y0,
         width: 10,
         height: CONFIG.trackHeight,
-        fill: 'rgba(0,0,0,0)'
+        fill: "rgba(0,0,0,0)"
       });
     }
 
@@ -499,7 +540,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return new Konva.Line({
         points: [x, y0, x, y1],
         stroke: CONFIG.highlightColor,
-        strokeWidth: 3,
+        strokeWidth: 2,
         visible: false,
         listening: false
       });
@@ -521,7 +562,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         highlightLayer.add(highlight);
 
         addHighlightNode(block.feature_id, highlight);
-        attachInteraction(hitbox, 'block', block.feature_id);
+        attachInteraction(hitbox, "block", block.feature_id);
       }
 
       for (const snp of sample.snps) {
@@ -534,7 +575,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         highlightLayer.add(highlight);
 
         addHighlightNode(snp.feature_id, highlight);
-        attachInteraction(hitbox, 'snp', snp.feature_id);
+        attachInteraction(hitbox, "snp", snp.feature_id);
       }
     }
 
@@ -544,7 +585,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       + CONFIG.bottomMargin;
 
     const stage = new Konva.Stage({
-      container: 'viewer',
+      container: "viewer",
       width: getStageWidth(),
       height: contentHeight
     });
@@ -575,7 +616,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         y: 0,
         width: getStageWidth(),
         height: contentHeight,
-        fill: 'white',
+        fill: "white",
         listening: false
       }));
 
@@ -588,17 +629,46 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       stage.draw();
     }
 
+    function redrawStagePreserveScroll() {
+      const viewerElement = document.getElementById("viewer");
+      const oldScrollableWidth = Math.max(1, viewerElement.scrollWidth - viewerElement.clientWidth);
+      const oldScrollRatio = oldScrollableWidth > 0
+        ? viewerElement.scrollLeft / oldScrollableWidth
+        : 0;
+
+      redrawStage();
+
+      const newScrollableWidth = Math.max(1, viewerElement.scrollWidth - viewerElement.clientWidth);
+      viewerElement.scrollLeft = oldScrollRatio * newScrollableWidth;
+    }
+
     state.featureGroups = buildFeatureGroups(REGION_DATA);
     renderSidebarDefault();
     redrawStage();
 
-    window.addEventListener('resize', () => {
-      redrawStage();
+    window.addEventListener("resize", () => {
+      redrawStagePreserveScroll();
+    });
+
+    document.getElementById("zoom-in").addEventListener("click", () => {
+      state.zoomX = Math.min(16, state.zoomX * 1.25);
+      redrawStagePreserveScroll();
+    });
+
+    document.getElementById("zoom-out").addEventListener("click", () => {
+      state.zoomX = Math.max(1, state.zoomX / 1.25);
+      redrawStagePreserveScroll();
+    });
+
+    document.getElementById("zoom-reset").addEventListener("click", () => {
+      state.zoomX = 1;
+      redrawStagePreserveScroll();
     });
   </script>
 </body>
 </html>
 """
+
 
 def build_html(region_data: dict[str, object]) -> str:
     """Render the final HTML document."""

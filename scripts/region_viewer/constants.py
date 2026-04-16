@@ -17,3 +17,11 @@ BOTTOM_MARGIN = 30
 SNP_LINE_WIDTH = 1
 VIEWER_MIN_WIDTH = 900
 SIDEBAR_WIDTH = 320
+
+# Zoom behaviour
+TARGET_VISIBLE_BP = 20_000  # ~20 kb visible at max zoom
+ZOOM_STEPS = 6              # number of clicks to reach max zoom
+MAX_ZOOM_CAP = 1000         # hard cap to avoid huge canvases
+
+# Axis behaviour
+TARGET_TICK_SPACING_PX = 100  # desired pixel spacing between ticks
