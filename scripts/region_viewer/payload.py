@@ -18,6 +18,11 @@ from .constants import (
     TRACK_HEIGHT,
     TRACK_Y_OFFSET,
     VIEWER_MIN_WIDTH,
+    TARGET_VISIBLE_BP,
+    ZOOM_STEPS,
+    MAX_ZOOM_CAP,
+    TARGET_TICK_SPACING_PX,
+    VIEWER_TOP_UI_HEIGHT
 )
 
 def build_sample_data(
@@ -106,6 +111,11 @@ def build_config_payload() -> dict[str, object]:
         "snpHeight": SNP_HEIGHT,
         "axisTicks": 6,
         "snpStrokeWidth": SNP_LINE_WIDTH,
+        "targetVisibleBp": TARGET_VISIBLE_BP,
+        "zoomSteps": ZOOM_STEPS,
+        "maxZoomCap": MAX_ZOOM_CAP,
+        "targetTickSpacingPx": TARGET_TICK_SPACING_PX,
+        "viewerTopUiHeight": VIEWER_TOP_UI_HEIGHT,
         "blockFill": "rgba(160,160,160,0.65)",
         "snpColor": "rgb(220,0,0)",
         "highlightColor": "rgb(0,120,255)",

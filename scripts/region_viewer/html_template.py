@@ -25,6 +25,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --border: #d9d9d9;
       --text: #1f1f1f;
       --muted: #6b7280;
+      --viewer-top-ui-height: %(viewer_top_ui_height)spx;
     }
 
     * {
@@ -71,23 +72,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+    }
+
+    .viewer-wrapper {
+      position: relative;
+      width: 100%%;
     }
 
     .viewer-toolbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--viewer-top-ui-height);
+      z-index: 10;
       display: flex;
-      gap: 8px;
+      justify-content: flex-end;
       align-items: center;
+      gap: 8px;
+      padding: 8px 10px 0 10px;
+      pointer-events: none;
     }
 
     .viewer-toolbar button {
       padding: 6px 10px;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: white;
+      background: rgba(255, 255, 255, 0.94);
       color: var(--text);
       cursor: pointer;
       font-size: 13px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      pointer-events: auto;
     }
 
     .viewer-toolbar button:hover {
@@ -159,12 +175,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div class="content-row">
       <div class="viewer-column">
-        <div class="viewer-toolbar">
-          <button id="zoom-out" type="button">−</button>
-          <button id="zoom-in" type="button">+</button>
-          <button id="zoom-reset" type="button">Reset</button>
+        <div class="viewer-wrapper">
+          <div class="viewer-toolbar">
+            <button id="zoom-out" type="button">−</button>
+            <button id="zoom-in" type="button">+</button>
+            <button id="zoom-reset" type="button">Reset</button>
+          </div>
+          <div id="viewer" class="viewer"></div>
         </div>
-        <div id="viewer" class="viewer"></div>
       </div>
 
       <aside id="sidebar" class="sidebar">
@@ -345,6 +363,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return Math.max(CONFIG.minWidth, viewerElement.clientWidth);
     }
 
+    function getInitialZoomX() {
+      const viewerElement = document.getElementById("viewer");
+      const availableWidth = viewerElement.clientWidth;
+
+      if (availableWidth <= 0) {
+        return 1;
+      }
+
+      return availableWidth / getBaseViewerWidth();
+    }
+
+    function getMaxZoomX() {
+      const theoretical = REGION_DATA.max_zone_length / CONFIG.targetVisibleBp;
+      return Math.min(CONFIG.maxZoomCap, Math.max(getInitialZoomX(), theoretical));
+    }
+
+    function getZoomFactor() {
+      const maxZoom = getMaxZoomX();
+      return Math.pow(maxZoom / getInitialZoomX(), 1 / CONFIG.zoomSteps);
+    }
+
     function getStageWidth() {
       return getBaseViewerWidth() * state.zoomX;
     }
@@ -354,7 +393,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function computePanelTop(panelIndex) {
-      return CONFIG.topMargin + panelIndex * (CONFIG.panelHeight + CONFIG.panelGap);
+      return CONFIG.viewerTopUiHeight + CONFIG.topMargin
+        + panelIndex * (CONFIG.panelHeight + CONFIG.panelGap);
     }
 
     function scaleX(position) {
@@ -378,10 +418,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return `${value} bp`;
     }
 
+    function niceStep(value) {
+      if (value <= 0) {
+        return 1;
+      }
+
+      const exponent = Math.floor(Math.log10(value));
+      const fraction = value / Math.pow(10, exponent);
+
+      let niceFraction;
+      if (fraction <= 1) {
+        niceFraction = 1;
+      } else if (fraction <= 2) {
+        niceFraction = 2;
+      } else if (fraction <= 5) {
+        niceFraction = 5;
+      } else {
+        niceFraction = 10;
+      }
+
+      return niceFraction * Math.pow(10, exponent);
+    }
+
     function drawGlobalAxis(layer) {
       const x0 = CONFIG.leftMargin;
       const x1 = CONFIG.leftMargin + computeTrackWidth();
-      const axisY = 24;
+      const axisY = CONFIG.viewerTopUiHeight + 24;
+      const trackWidth = computeTrackWidth();
 
       const axis = new Konva.Line({
         points: [x0, axisY, x1, axisY],
@@ -391,10 +454,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
       layer.add(axis);
 
-      for (let i = 0; i <= CONFIG.axisTicks; i += 1) {
-        const ratio = i / CONFIG.axisTicks;
-        const x = x0 + ratio * (x1 - x0);
-        const value = Math.round(1 + ratio * (REGION_DATA.max_zone_length - 1));
+      const targetPx = CONFIG.targetTickSpacingPx;
+      const bpPerPixel = REGION_DATA.max_zone_length / trackWidth;
+      const rawStep = bpPerPixel * targetPx;
+      const step = niceStep(rawStep);
+
+      for (let value = step; value <= REGION_DATA.max_zone_length; value += step) {
+        const x = scaleX(value);
 
         const tick = new Konva.Line({
           points: [x, axisY, x, axisY + 6],
@@ -579,14 +645,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
     }
 
-    const contentHeight = CONFIG.topMargin
+    const contentHeight = CONFIG.viewerTopUiHeight
+      + CONFIG.topMargin
       + REGION_DATA.samples.length * CONFIG.panelHeight
       + Math.max(0, REGION_DATA.samples.length - 1) * CONFIG.panelGap
       + CONFIG.bottomMargin;
 
     const stage = new Konva.Stage({
       container: "viewer",
-      width: getStageWidth(),
+      width: 1,
       height: contentHeight
     });
 
@@ -644,6 +711,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     state.featureGroups = buildFeatureGroups(REGION_DATA);
     renderSidebarDefault();
+    state.zoomX = getInitialZoomX();
     redrawStage();
 
     window.addEventListener("resize", () => {
@@ -651,17 +719,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     });
 
     document.getElementById("zoom-in").addEventListener("click", () => {
-      state.zoomX = Math.min(16, state.zoomX * 1.25);
+      state.zoomX = Math.min(getMaxZoomX(), state.zoomX * getZoomFactor());
       redrawStagePreserveScroll();
     });
 
     document.getElementById("zoom-out").addEventListener("click", () => {
-      state.zoomX = Math.max(1, state.zoomX / 1.25);
+      state.zoomX = Math.max(getInitialZoomX(), state.zoomX / getZoomFactor());
       redrawStagePreserveScroll();
     });
 
     document.getElementById("zoom-reset").addEventListener("click", () => {
-      state.zoomX = 1;
+      state.zoomX = getInitialZoomX();
       redrawStagePreserveScroll();
     });
   </script>
@@ -672,8 +740,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 def build_html(region_data: dict[str, object]) -> str:
     """Render the final HTML document."""
+    config = build_config_payload()
     return HTML_TEMPLATE % {
         "region_data": json.dumps(region_data),
-        "config": json.dumps(build_config_payload()),
+        "config": json.dumps(config),
         "sidebar_width": SIDEBAR_WIDTH,
+        "viewer_top_ui_height": config["viewerTopUiHeight"],
     }
