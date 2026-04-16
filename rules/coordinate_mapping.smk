@@ -1,7 +1,7 @@
 rule map_snp_coordinates:
     input:
         vcf=get_final_snp_output(),
-        block_starts=BLOCK_STARTS_TSV,
+        block_coords=BLOCK_COORDINATES_TSV,
         samples_tsv=SAMPLES_TSV
     output:
         long=SNP_POS_LONG_TSV,
@@ -16,7 +16,7 @@ rule map_snp_coordinates:
         mkdir -p "$(dirname {output.long})" "$(dirname "{log.stdout}")"
         python3 "{SCRIPTS_DIR}/map_snp_coordinates.py" \
             --vcf "{input.vcf}" \
-            --block-starts "{input.block_starts}" \
+            --block-coords "{input.block_coords}" \
             --samples-tsv "{input.samples_tsv}" \
             --align-dir "{ALIGN_DIR}" \
             --long-output "{output.long}" \

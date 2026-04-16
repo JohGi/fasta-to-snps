@@ -163,20 +163,20 @@ class SnpPositionProjector:
     """Project SNP coordinates from alignments to zone and source sequences."""
 
     vcf_path: Path
-    block_starts_path: Path
+    block_coords_path: Path
     samples_tsv_path: Path
     align_dir: Path
     long_output_path: Path
     wide_output_path: Path
     sample_order: list[str] = field(factory=list)
     variants_by_block: dict[str, list[VariantRecord]] = field(factory=dict)
-    block_starts: dict[tuple[str, str], int] = field(factory=dict)
+    block_starts_in_zone: dict[tuple[str, str], int] = field(factory=dict)
     sample_offsets: dict[str, SampleOffset] = field(factory=dict)
 
     def run(self) -> None:
         """Run the full SNP projection workflow."""
         self.sample_order, self.variants_by_block = read_vcf(self.vcf_path)
-        self.block_starts = read_block_starts(self.block_starts_path)
+        self.block_starts_in_zone = read_block_coords(self.block_coords_path)
         self.sample_offsets = read_sample_offsets(self.samples_tsv_path)
         long_rows = self.project_variants()
         long_df = build_long_dataframe(long_rows)
@@ -222,7 +222,7 @@ class SnpPositionProjector:
 
         for sample in self.sample_order:
             projection = projector.get_projection(variant.aln_pos, sample)
-            block_start_in_zone = self.block_starts.get((variant.block_id, sample))
+            block_start_in_zone = self.block_starts_in_zone.get((variant.block_id, sample))
             zone_start_in_source_seq = self.sample_offsets.get(
                 sample,
                 SampleOffset(sample=sample, zone_start_in_source_seq=1),
@@ -265,10 +265,10 @@ def parse_args() -> argparse.Namespace:
         help="Filtered or unfiltered SNP VCF generated from block alignments.",
     )
     parser.add_argument(
-        "--block-starts",
+        "--block-coords",
         required=True,
         type=Path,
-        help="TSV with columns: block_id, sample, block_start_1based.",
+        help="TSV with columns including: block_id, sample, block_start_in_zone.",
     )
     parser.add_argument(
         "--samples-tsv",
@@ -277,7 +277,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Input samples TSV used by the workflow. "
             "Column 2 must contain sample names. Column 3 is optional and, if present, "
-            "is interpreted as zone_start_in_source_seq. Missing offsets default to 1."
+            "is interpreted as zone_start_in_source_seq. Missing or empty offsets default to 1."
         ),
     )
     parser.add_argument(
@@ -357,24 +357,28 @@ def read_vcf(vcf_path: Path) -> tuple[list[str], dict[str, list[VariantRecord]]]
     return sample_order, variants_by_block
 
 
-def read_block_starts(block_starts_path: Path) -> dict[tuple[str, str], int]:
-    """Read block start positions keyed by (block_id, sample)."""
-    dataframe = pl.read_csv(block_starts_path, separator="\t")
-    required_columns = {"block_id", "sample", "block_start_1based"}
+def read_block_coords(block_coords_path: Path) -> dict[tuple[str, str], int]:
+    """Read block start-in-zone positions keyed by (block_id, sample)."""
+    dataframe = pl.read_csv(block_coords_path, separator="\t")
+    required_columns = {"block_id", "sample", "block_start_in_zone"}
 
     if not required_columns.issubset(set(dataframe.columns)):
         raise ValueError(
-            f"Missing required columns in block starts TSV {block_starts_path}: "
+            f"Missing required columns in block coordinates TSV {block_coords_path}: "
             f"expected {sorted(required_columns)}, got {dataframe.columns}"
         )
 
-    block_starts: dict[tuple[str, str], int] = {}
+    block_starts_in_zone: dict[tuple[str, str], int] = {}
     for row in dataframe.iter_rows(named=True):
         key = (str(row["block_id"]), str(row["sample"]))
-        block_starts[key] = int(row["block_start_1based"])
+        block_starts_in_zone[key] = int(row["block_start_in_zone"])
 
-    LOGGER.info("Read %d block start entries from %s", len(block_starts), block_starts_path)
-    return block_starts
+    LOGGER.info(
+        "Read %d block coordinate entries from %s",
+        len(block_starts_in_zone),
+        block_coords_path,
+    )
+    return block_starts_in_zone
 
 
 def read_sample_offsets(samples_tsv_path: Path) -> dict[str, SampleOffset]:
@@ -383,21 +387,21 @@ def read_sample_offsets(samples_tsv_path: Path) -> dict[str, SampleOffset]:
 
     with samples_tsv_path.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
+            stripped = line.rstrip("\n")
+            if not stripped.strip() or stripped.lstrip().startswith("#"):
                 continue
 
-            fields = stripped.split()
+            fields = stripped.split("\t")
             if len(fields) < 2:
                 raise ValueError(
                     f"Expected at least 2 columns in samples TSV at line {line_number}: {line.rstrip()}"
                 )
 
-            sample = fields[1]
+            sample = fields[1].strip()
             zone_start_in_source_seq = 1
 
-            if len(fields) >= 3:
-                zone_start_in_source_seq = int(fields[2])
+            if len(fields) >= 3 and fields[2].strip():
+                zone_start_in_source_seq = int(fields[2].strip())
 
             sample_offsets[sample] = SampleOffset(
                 sample=sample,
@@ -486,7 +490,7 @@ def main() -> None:
 
     projector = SnpPositionProjector(
         vcf_path=args.vcf,
-        block_starts_path=args.block_starts,
+        block_coords_path=args.block_coords,
         samples_tsv_path=args.samples_tsv,
         align_dir=args.align_dir,
         long_output_path=args.long_output,

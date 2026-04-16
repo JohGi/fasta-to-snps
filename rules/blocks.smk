@@ -87,21 +87,23 @@ rule filter_sibeliaz_blocks:
             2> "{log.stderr}"
         """
 
-rule write_block_starts_tsv:
+rule map_block_coordinates:
     input:
-        FILTERED_GFF
+        gff=FILTERED_GFF,
+        samples_tsv=SAMPLES_TSV
     output:
-        BLOCK_STARTS_TSV
+        BLOCK_COORDINATES_TSV
     benchmark:
-        BENCHMARK_DIR / "write_block_starts_tsv.tsv"
+        BENCHMARK_DIR / "map_block_coordinates.tsv"
     log:
-        stdout=LOG_DIR / "write_block_starts_tsv" / "write_block_starts_tsv.stdout",
-        stderr=LOG_DIR / "write_block_starts_tsv" / "write_block_starts_tsv.stderr"
+        stdout=LOG_DIR / "map_block_coordinates" / "map_block_coordinates.stdout",
+        stderr=LOG_DIR / "map_block_coordinates" / "map_block_coordinates.stderr"
     shell:
         r"""
-        mkdir -p "$(dirname {output})" "$(dirname "{log.stdout}")"
-        bash "{SCRIPTS_DIR}/write_block_starts_tsv.sh" \
-            --input "{input}" \
+        mkdir -p "$(dirname "{output}")" "$(dirname "{log.stdout}")"
+        python3 "{SCRIPTS_DIR}/map_block_coordinates.py" \
+            --gff "{input.gff}" \
+            --samples-tsv "{input.samples_tsv}" \
             --output "{output}" \
             > "{log.stdout}" \
             2> "{log.stderr}"
