@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Author: Johanna Girodolle
 
-"""Plot an interactive region overview with synchronized hover across samples."""
+"""Generate an interactive region overview HTML using Konva."""
 
 from __future__ import annotations
 
@@ -10,29 +10,617 @@ import json
 import logging
 from pathlib import Path
 
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import polars as pl
 from attrs import define, field
 
 
 LOGGER = logging.getLogger(__name__)
 
-ZONE_Y0 = 0.0
-ZONE_Y1 = 1.0
-BLOCK_Y0 = 0.0
-BLOCK_Y1 = 1.0
-SNP_Y0 = 0.0
-SNP_Y1 = 1.0
+TRACK_HEIGHT = 28
+FEATURE_HEIGHT = 22
+SNP_HEIGHT = 20
+TRACK_Y_OFFSET = 12
+PANEL_BOTTOM_SPACE = 12
+PANEL_HEIGHT = TRACK_Y_OFFSET + TRACK_HEIGHT + PANEL_BOTTOM_SPACE
+PANEL_GAP = 6
+LEFT_MARGIN = 110
+RIGHT_MARGIN = 40
+TOP_MARGIN = 52
+BOTTOM_MARGIN = 30
+SNP_LINE_WIDTH = 1
+VIEWER_MIN_WIDTH = 900
+SIDEBAR_WIDTH = 320
 
-BLOCK_FILL_COLOR = "rgba(160,160,160,0.60)"
-SNP_COLOR = "rgba(220,0,0,1.0)"
-SNP_HOVER_MARKER_COLOR = "rgba(255,0,0,0)"
-BLOCK_HOVER_MARKER_COLOR = "rgba(0,0,255,0)"
-HIGHLIGHT_COLOR = "rgba(0,120,255,1.0)"
 
-PANEL_HEIGHT_PX = 260
-VERTICAL_SPACING = 0.10
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Region Overview</title>
+  <script src="https://unpkg.com/konva@10/konva.min.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel-bg: #fafafa;
+      --border: #d9d9d9;
+      --text: #1f1f1f;
+      --muted: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .info-panel {
+      width: 100%%;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-bg);
+    }
+
+    .info-panel h2 {
+      margin: 0 0 12px 0;
+      font-size: 18px;
+    }
+
+    .content-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      width: 100%%;
+    }
+
+    .viewer {
+      flex: 1 1 auto;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      overflow: auto;
+    }
+
+    .sidebar {
+      flex: 0 0 %(sidebar_width)spx;
+      width: %(sidebar_width)spx;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-bg);
+    }
+
+    .sidebar h2 {
+      margin: 0 0 12px 0;
+      font-size: 18px;
+    }
+
+    .hint {
+      color: var(--muted);
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    .sample-card {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+    }
+
+    .sample-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 8px;
+      font-size: 13px;
+    }
+
+    .kv .key {
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section id="info-panel" class="info-panel">
+      <h2>Region viewer</h2>
+      <p class="hint">Hover a block or a SNP to highlight the corresponding feature across all samples.</p>
+    </section>
+
+    <div class="content-row">
+      <div id="viewer" class="viewer"></div>
+
+      <aside id="sidebar" class="sidebar">
+        <h2>Hovered feature</h2>
+        <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const REGION_DATA = %(region_data)s;
+    const CONFIG = %(config)s;
+
+    const state = {
+      hoveredFeatureId: null,
+      hoveredFeatureType: null,
+      featureGroups: new Map(),
+      highlightNodes: new Map()
+    };
+
+    function buildFeatureGroups(data) {
+      const groups = new Map();
+
+      for (const sample of data.samples) {
+        for (const block of sample.blocks) {
+          const entry = {
+            sample: sample.sample,
+            featureType: 'block',
+            featureId: block.feature_id,
+            info: {
+              sample: sample.sample,
+              block_id: block.block_id,
+              start: block.start,
+              end: block.end,
+              length: block.end - block.start + 1
+            }
+          };
+
+          if (!groups.has(block.feature_id)) {
+            groups.set(block.feature_id, []);
+          }
+          groups.get(block.feature_id).push(entry);
+        }
+
+        for (const snp of sample.snps) {
+          const entry = {
+            sample: sample.sample,
+            featureType: 'snp',
+            featureId: snp.feature_id,
+            info: {
+              sample: sample.sample,
+              block_id: snp.block_id,
+              aln_pos: snp.aln_pos,
+              nt: snp.nt,
+              pos_in_block: snp.pos_in_block,
+              pos_in_zone: snp.pos_in_zone,
+              pos_in_source_seq: snp.pos_in_source_seq
+            }
+          };
+
+          if (!groups.has(snp.feature_id)) {
+            groups.set(snp.feature_id, []);
+          }
+          groups.get(snp.feature_id).push(entry);
+        }
+      }
+
+      return groups;
+    }
+
+    function renderSidebarDefault() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.innerHTML = `
+        <h2>Hovered feature</h2>
+        <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
+      `;
+    }
+
+    function renderFeatureSidebar(featureType, featureId) {
+      const sidebar = document.getElementById('sidebar');
+      const entries = state.featureGroups.get(featureId) || [];
+
+      if (entries.length === 0) {
+        renderSidebarDefault();
+        return;
+      }
+
+      const kind = featureType === 'snp' ? 'SNP' : 'Collinear block';
+      const firstInfo = entries[0].info;
+      const title = featureType === 'snp'
+        ? `${firstInfo.block_id}:${firstInfo.aln_pos}`
+        : `${firstInfo.block_id}`;
+
+      let html = `<h2>${kind}</h2><p class="hint"><b>ID:</b> ${escapeHtml(title)}</p>`;
+
+      for (const sampleName of REGION_DATA.samples.map(sample => sample.sample)) {
+        const entry = entries.find(item => item.sample === sampleName);
+        html += `<div class="sample-card"><h3>${escapeHtml(sampleName)}</h3>`;
+
+        if (!entry) {
+          html += `<p class="hint">No corresponding feature in this sample.</p>`;
+        } else {
+          html += '<div class="kv">';
+          const hiddenKeys = new Set(['sample', 'block_id', 'aln_pos', 'pos_in_block']);
+
+          for (const [key, value] of Object.entries(entry.info)) {
+            if (hiddenKeys.has(key)) {
+              continue;
+            }
+            html += `<div class="key">${escapeHtml(key)}</div><div>${escapeHtml(String(value))}</div>`;
+          }
+
+          html += '</div>';
+        }
+
+        html += '</div>';
+      }
+
+      sidebar.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    }
+
+    function setHighlight(featureType, featureId) {
+      clearHighlight();
+      state.hoveredFeatureType = featureType;
+      state.hoveredFeatureId = featureId;
+
+      const nodes = state.highlightNodes.get(featureId) || [];
+      for (const node of nodes) {
+        node.visible(true);
+      }
+
+      renderFeatureSidebar(featureType, featureId);
+      stage.batchDraw();
+    }
+
+    function clearHighlight() {
+      for (const nodes of state.highlightNodes.values()) {
+        for (const node of nodes) {
+          node.visible(false);
+        }
+      }
+
+      state.hoveredFeatureType = null;
+      state.hoveredFeatureId = null;
+      renderSidebarDefault();
+      stage.batchDraw();
+    }
+
+    function addHighlightNode(featureId, node) {
+      if (!state.highlightNodes.has(featureId)) {
+        state.highlightNodes.set(featureId, []);
+      }
+      state.highlightNodes.get(featureId).push(node);
+    }
+
+    function attachInteraction(node, featureType, featureId) {
+      node.on('mouseenter', () => {
+        document.body.style.cursor = 'pointer';
+        setHighlight(featureType, featureId);
+      });
+
+      node.on('mouseleave', () => {
+        document.body.style.cursor = 'default';
+        clearHighlight();
+      });
+    }
+
+    function getStageWidth() {
+      const viewerElement = document.getElementById('viewer');
+      return Math.max(CONFIG.minWidth, viewerElement.clientWidth);
+    }
+
+    function computeTrackWidth() {
+      return getStageWidth() - CONFIG.leftMargin - CONFIG.rightMargin;
+    }
+
+    function computePanelTop(panelIndex) {
+      return CONFIG.topMargin + panelIndex * (CONFIG.panelHeight + CONFIG.panelGap);
+    }
+
+    function scaleX(position) {
+      const trackWidth = computeTrackWidth();
+      const globalLength = REGION_DATA.max_zone_length;
+
+      if (globalLength <= 1) {
+        return CONFIG.leftMargin;
+      }
+
+      return CONFIG.leftMargin + ((position - 1) / (globalLength - 1)) * trackWidth;
+    }
+
+    function formatBp(value) {
+      if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)} Mb`;
+      }
+      if (value >= 1000) {
+        return `${(value / 1000).toFixed(1)} kb`;
+      }
+      return `${value} bp`;
+    }
+
+    function drawGlobalAxis(layer) {
+      const x0 = CONFIG.leftMargin;
+      const x1 = CONFIG.leftMargin + computeTrackWidth();
+      const axisY = 24;
+
+      const axis = new Konva.Line({
+        points: [x0, axisY, x1, axisY],
+        stroke: '#444444',
+        strokeWidth: 1,
+        listening: false
+      });
+      layer.add(axis);
+
+      for (let i = 0; i <= CONFIG.axisTicks; i += 1) {
+        const ratio = i / CONFIG.axisTicks;
+        const x = x0 + ratio * (x1 - x0);
+        const value = Math.round(1 + ratio * (REGION_DATA.max_zone_length - 1));
+
+        const tick = new Konva.Line({
+          points: [x, axisY, x, axisY + 6],
+          stroke: '#444444',
+          strokeWidth: 1,
+          listening: false
+        });
+
+        const label = new Konva.Text({
+          x: x - 30,
+          y: axisY - 18,
+          width: 60,
+          text: formatBp(value),
+          fontSize: 10,
+          fill: '#555555',
+          align: 'center',
+          listening: false
+        });
+
+        layer.add(tick);
+        layer.add(label);
+      }
+    }
+
+    function drawSampleLabel(layer, panelTop, sampleName) {
+      const label = new Konva.Text({
+        x: 10,
+        y: panelTop + CONFIG.trackY + 4,
+        width: CONFIG.leftMargin - 20,
+        text: sampleName,
+        fontSize: 16,
+        fontStyle: 'bold',
+        fill: '#222222',
+        listening: false
+      });
+      layer.add(label);
+    }
+
+    function drawSampleOutline(layer, sample, panelTop) {
+      const x0 = CONFIG.leftMargin;
+      const x1 = scaleX(sample.zone_length);
+      const y0 = panelTop + CONFIG.trackY;
+      const width = Math.max(1, x1 - x0);
+
+      const outline = new Konva.Rect({
+        x: x0,
+        y: y0,
+        width: width,
+        height: CONFIG.trackHeight,
+        stroke: 'black',
+        strokeWidth: 1,
+        listening: false
+      });
+      layer.add(outline);
+    }
+
+    function getFeatureY(panelTop) {
+      return panelTop + CONFIG.trackY + (CONFIG.trackHeight - CONFIG.featureHeight) / 2;
+    }
+
+    function getSnpY(panelTop) {
+      return panelTop + CONFIG.trackY + (CONFIG.trackHeight - CONFIG.snpHeight) / 2;
+    }
+
+    function createBlockShape(sample, feature, panelTop) {
+      const x0 = scaleX(feature.start);
+      const x1 = scaleX(feature.end);
+      const y0 = getFeatureY(panelTop);
+
+      return new Konva.Rect({
+        x: x0,
+        y: y0,
+        width: Math.max(1, x1 - x0),
+        height: CONFIG.featureHeight,
+        fill: CONFIG.blockFill,
+        strokeWidth: 0,
+        listening: false
+      });
+    }
+
+    function createBlockHitbox(sample, feature, panelTop) {
+      const x0 = scaleX(feature.start);
+      const x1 = scaleX(feature.end);
+      const y0 = panelTop + CONFIG.trackY;
+
+      return new Konva.Rect({
+        x: x0,
+        y: y0,
+        width: Math.max(6, x1 - x0),
+        height: CONFIG.trackHeight,
+        fill: 'rgba(0,0,0,0)'
+      });
+    }
+
+    function createBlockHighlight(sample, feature, panelTop) {
+      const x0 = scaleX(feature.start);
+      const x1 = scaleX(feature.end);
+      const y0 = getFeatureY(panelTop);
+
+      return new Konva.Rect({
+        x: x0,
+        y: y0,
+        width: Math.max(1, x1 - x0),
+        height: CONFIG.featureHeight,
+        stroke: CONFIG.highlightColor,
+        strokeWidth: 2,
+        visible: false,
+        listening: false
+      });
+    }
+
+    function createSnpLine(sample, feature, panelTop) {
+      const x = scaleX(feature.pos_in_zone);
+      const y0 = getSnpY(panelTop);
+      const y1 = y0 + CONFIG.snpHeight;
+
+      return new Konva.Line({
+        points: [x, y0, x, y1],
+        stroke: CONFIG.snpColor,
+        strokeWidth: CONFIG.snpStrokeWidth,
+        listening: false
+      });
+    }
+
+    function createSnpHitbox(sample, feature, panelTop) {
+      const x = scaleX(feature.pos_in_zone);
+      const y0 = panelTop + CONFIG.trackY;
+
+      return new Konva.Rect({
+        x: x - 5,
+        y: y0,
+        width: 10,
+        height: CONFIG.trackHeight,
+        fill: 'rgba(0,0,0,0)'
+      });
+    }
+
+    function createSnpHighlight(sample, feature, panelTop) {
+      const x = scaleX(feature.pos_in_zone);
+      const y0 = getSnpY(panelTop);
+      const y1 = y0 + CONFIG.snpHeight;
+
+      return new Konva.Line({
+        points: [x, y0, x, y1],
+        stroke: CONFIG.highlightColor,
+        strokeWidth: 3,
+        visible: false,
+        listening: false
+      });
+    }
+
+    function drawSample(featureLayer, interactionLayer, highlightLayer, sample, panelIndex) {
+      const panelTop = computePanelTop(panelIndex);
+
+      drawSampleLabel(featureLayer, panelTop, sample.sample);
+      drawSampleOutline(featureLayer, sample, panelTop);
+
+      for (const block of sample.blocks) {
+        const base = createBlockShape(sample, block, panelTop);
+        const hitbox = createBlockHitbox(sample, block, panelTop);
+        const highlight = createBlockHighlight(sample, block, panelTop);
+
+        featureLayer.add(base);
+        interactionLayer.add(hitbox);
+        highlightLayer.add(highlight);
+
+        addHighlightNode(block.feature_id, highlight);
+        attachInteraction(hitbox, 'block', block.feature_id);
+      }
+
+      for (const snp of sample.snps) {
+        const base = createSnpLine(sample, snp, panelTop);
+        const hitbox = createSnpHitbox(sample, snp, panelTop);
+        const highlight = createSnpHighlight(sample, snp, panelTop);
+
+        featureLayer.add(base);
+        interactionLayer.add(hitbox);
+        highlightLayer.add(highlight);
+
+        addHighlightNode(snp.feature_id, highlight);
+        attachInteraction(hitbox, 'snp', snp.feature_id);
+      }
+    }
+
+    const contentHeight = CONFIG.topMargin
+      + REGION_DATA.samples.length * CONFIG.panelHeight
+      + Math.max(0, REGION_DATA.samples.length - 1) * CONFIG.panelGap
+      + CONFIG.bottomMargin;
+
+    const stage = new Konva.Stage({
+      container: 'viewer',
+      width: getStageWidth(),
+      height: contentHeight
+    });
+
+    const backgroundLayer = new Konva.Layer();
+    const featureLayer = new Konva.Layer();
+    const highlightLayer = new Konva.Layer();
+    const interactionLayer = new Konva.Layer();
+
+    stage.add(backgroundLayer);
+    stage.add(featureLayer);
+    stage.add(highlightLayer);
+    stage.add(interactionLayer);
+
+    function redrawStage() {
+      stage.width(getStageWidth());
+      stage.height(contentHeight);
+
+      backgroundLayer.destroyChildren();
+      featureLayer.destroyChildren();
+      highlightLayer.destroyChildren();
+      interactionLayer.destroyChildren();
+
+      state.highlightNodes = new Map();
+
+      backgroundLayer.add(new Konva.Rect({
+        x: 0,
+        y: 0,
+        width: getStageWidth(),
+        height: contentHeight,
+        fill: 'white',
+        listening: false
+      }));
+
+      drawGlobalAxis(featureLayer);
+
+      REGION_DATA.samples.forEach((sample, index) => {
+        drawSample(featureLayer, interactionLayer, highlightLayer, sample, index);
+      });
+
+      stage.draw();
+    }
+
+    state.featureGroups = buildFeatureGroups(REGION_DATA);
+    renderSidebarDefault();
+    redrawStage();
+
+    window.addEventListener('resize', () => {
+      redrawStage();
+    });
+  </script>
+</body>
+</html>
+"""
 
 
 @define(frozen=True)
@@ -54,13 +642,8 @@ class BlockFeature:
     end: int
 
     @property
-    def length(self) -> int:
-        """Return block length in base pairs."""
-        return self.end - self.start + 1
-
-    @property
     def feature_id(self) -> str:
-        """Return the shared block identifier."""
+        """Return a shared feature identifier."""
         return f"block::{self.block_id}"
 
 
@@ -78,13 +661,13 @@ class SnpFeature:
 
     @property
     def feature_id(self) -> str:
-        """Return the shared SNP identifier."""
+        """Return a shared feature identifier."""
         return f"snp::{self.block_id}::{self.aln_pos}"
 
 
 @define(frozen=True)
 class SampleData:
-    """Store plotting data for one sample."""
+    """Store all display data for one sample."""
 
     sample: str
     zone_length: int
@@ -92,42 +675,9 @@ class SampleData:
     snps: list[SnpFeature] = field(factory=list)
 
 
-@define(frozen=True)
-class TraceCoordinates:
-    """Store grouped coordinates for one trace."""
-
-    x: list[int | float | None]
-    y: list[float | None]
-
-
-@define(frozen=True)
-class HoverTraceData:
-    """Store hover marker data for one trace."""
-
-    x: list[int | float]
-    y: list[float]
-    text: list[str]
-    customdata: list[list[str]]
-
-
-@define(frozen=True)
-class HighlightEntry:
-    """Store one feature entry used by the synchronized JS highlight."""
-
-    sample: str
-    feature_type: str
-    feature_id: str
-    label: str
-    x0: int
-    x1: int
-    y0: float
-    y1: float
-    info: dict[str, int | str]
-
-
 @define
-class RegionOverviewPlotter:
-    """Build the Plotly figure and export it as an interactive HTML page."""
+class RegionOverviewBuilder:
+    """Build the final Konva HTML from workflow outputs."""
 
     samples_tsv_path: Path
     blocks_gff_path: Path
@@ -136,29 +686,26 @@ class RegionOverviewPlotter:
     output_path: Path
 
     def run(self) -> None:
-        """Run the full workflow."""
+        """Run the full HTML generation workflow."""
         sample_records = read_samples(self.samples_tsv_path)
         fasta_lengths = read_fasta_lengths(self.fasta_dir)
         blocks_by_sample = read_blocks(self.blocks_gff_path)
         snps_by_sample = read_snps(self.snp_long_path)
-
-        data = build_data(
+        sample_data = build_sample_data(
             sample_records=sample_records,
             fasta_lengths=fasta_lengths,
             blocks_by_sample=blocks_by_sample,
             snps_by_sample=snps_by_sample,
         )
-        highlight_payload = build_highlight_payload(data)
-        figure = build_plot(data)
-        write_html_with_js(figure, self.output_path, highlight_payload)
+        region_data = build_region_payload(sample_data)
+        html = build_html(region_data)
+        write_html(html, self.output_path)
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description=(
-            "Plot an interactive region overview with synchronized hover across samples."
-        )
+        description="Generate an interactive Konva-based region overview HTML."
     )
     parser.add_argument("--samples-tsv", type=Path, required=True)
     parser.add_argument("--blocks-gff", type=Path, required=True)
@@ -191,20 +738,20 @@ def read_samples(path: Path) -> list[SampleRecord]:
             if not stripped or stripped.startswith("#"):
                 continue
 
-            parts = stripped.split()
-            if len(parts) < 2:
+            fields = stripped.split()
+            if len(fields) < 2:
                 raise ValueError(
                     f"Expected at least 2 columns in samples TSV at line {line_number}: {line.rstrip()}"
                 )
 
-            fasta_path = Path(parts[0])
-            sample = parts[1]
-            zone_start_in_source_seq = int(parts[2]) if len(parts) > 2 else 1
+            fasta_path = Path(fields[0])
+            sample = fields[1]
+            zone_start = int(fields[2]) if len(fields) > 2 else 1
             records.append(
                 SampleRecord(
                     fasta_path=fasta_path,
                     sample=sample,
-                    zone_start_in_source_seq=zone_start_in_source_seq,
+                    zone_start_in_source_seq=zone_start,
                 )
             )
 
@@ -215,7 +762,7 @@ def read_samples(path: Path) -> list[SampleRecord]:
 
 
 def read_single_fasta_length(path: Path) -> int:
-    """Read the length of a single-sequence FASTA."""
+    """Read the sequence length of a single-sequence FASTA."""
     if not path.is_file():
         raise FileNotFoundError(f"FASTA file not found: {path}")
 
@@ -243,7 +790,7 @@ def read_single_fasta_length(path: Path) -> int:
 
 
 def read_fasta_lengths(fasta_dir: Path) -> dict[str, int]:
-    """Read sequence lengths from cleaned per-sample FASTA files."""
+    """Read lengths from per-sample FASTA files."""
     if not fasta_dir.is_dir():
         raise FileNotFoundError(f"FASTA directory not found: {fasta_dir}")
 
@@ -258,7 +805,7 @@ def read_fasta_lengths(fasta_dir: Path) -> dict[str, int]:
 
 
 def parse_block_id(attributes: str) -> str:
-    """Extract block ID from a GFF attribute string."""
+    """Extract the block ID from a GFF attribute column."""
     for item in attributes.split(";"):
         if item.startswith("ID="):
             return item.removeprefix("ID=").strip()
@@ -266,7 +813,7 @@ def parse_block_id(attributes: str) -> str:
 
 
 def read_blocks(path: Path) -> dict[str, list[BlockFeature]]:
-    """Read block features from the filtered GFF."""
+    """Read conserved blocks from the filtered GFF."""
     blocks_by_sample: dict[str, list[BlockFeature]] = {}
 
     with path.open(encoding="utf-8") as handle:
@@ -275,29 +822,23 @@ def read_blocks(path: Path) -> dict[str, list[BlockFeature]]:
             if not stripped or stripped.startswith("#"):
                 continue
 
-            parts = stripped.split("\t")
-            if len(parts) != 9:
-                raise ValueError(f"Invalid GFF line with {len(parts)} columns: {line.rstrip()}")
+            fields = stripped.split("\t")
+            if len(fields) != 9:
+                raise ValueError(f"Invalid GFF line with {len(fields)} columns: {line.rstrip()}")
 
-            sample = parts[0]
-            start = int(parts[3])
-            end = int(parts[4])
-            block_id = parse_block_id(parts[8])
-
+            sample = fields[0]
+            start = int(fields[3])
+            end = int(fields[4])
+            block_id = parse_block_id(fields[8])
             blocks_by_sample.setdefault(sample, []).append(
-                BlockFeature(
-                    sample=sample,
-                    block_id=block_id,
-                    start=start,
-                    end=end,
-                )
+                BlockFeature(sample=sample, block_id=block_id, start=start, end=end)
             )
 
     return blocks_by_sample
 
 
 def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
-    """Read SNP features from the long-format SNP TSV."""
+    """Read SNPs from the long-format SNP TSV."""
     dataframe = pl.read_csv(path, separator="\t")
     required_columns = {
         "block_id",
@@ -328,600 +869,109 @@ def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
     return snps_by_sample
 
 
-def build_data(
+def build_sample_data(
     sample_records: list[SampleRecord],
     fasta_lengths: dict[str, int],
     blocks_by_sample: dict[str, list[BlockFeature]],
     snps_by_sample: dict[str, list[SnpFeature]],
 ) -> list[SampleData]:
-    """Build per-sample plotting data in sample TSV order."""
-    data: list[SampleData] = []
+    """Build plotting data in samples TSV order."""
+    sample_data: list[SampleData] = []
 
     for sample_record in sample_records:
         sample = sample_record.sample
         if sample not in fasta_lengths:
             raise ValueError(f"Missing FASTA length for sample {sample!r}")
 
-        data.append(
+        sample_data.append(
             SampleData(
                 sample=sample,
                 zone_length=fasta_lengths[sample],
                 blocks=sorted(
                     blocks_by_sample.get(sample, []),
-                    key=lambda feature: (feature.start, feature.end, feature.block_id),
+                    key=lambda block: (block.start, block.end, block.block_id),
                 ),
                 snps=sorted(
                     snps_by_sample.get(sample, []),
-                    key=lambda feature: (feature.pos_in_zone, feature.block_id, feature.aln_pos),
+                    key=lambda snp: (snp.pos_in_zone, snp.block_id, snp.aln_pos),
                 ),
             )
         )
 
-    return data
+    return sample_data
 
 
-def build_block_fill_trace_coordinates(blocks: list[BlockFeature]) -> TraceCoordinates:
-    """Build grouped polygon coordinates for visible block fills."""
-    x_values: list[int | None] = []
-    y_values: list[float | None] = []
+def build_region_payload(sample_data: list[SampleData]) -> dict[str, object]:
+    """Build the JSON payload injected into the HTML."""
+    max_zone_length = max(sample.zone_length for sample in sample_data)
 
-    for block in blocks:
-        x_values.extend([block.start, block.start, block.end, block.end, block.start, None])
-        y_values.extend([BLOCK_Y0, BLOCK_Y1, BLOCK_Y1, BLOCK_Y0, BLOCK_Y0, None])
-
-    return TraceCoordinates(x=x_values, y=y_values)
-
-
-def build_block_hover_trace_data(blocks: list[BlockFeature]) -> HoverTraceData:
-    """Build invisible block hover markers."""
-    x_values: list[float] = []
-    y_values: list[float] = []
-    text_values: list[str] = []
-    customdata_values: list[list[str]] = []
-
-    for block in blocks:
-        x_values.append((block.start + block.end) / 2.0)
-        y_values.append(0.25)
-        text_values.append(
-            "<br>".join(
-                [
-                    f"sample: {block.sample}",
-                    f"block: {block.block_id}",
-                    f"start: {block.start}",
-                    f"end: {block.end}",
-                    f"length: {block.length}",
-                ]
-            )
-        )
-        customdata_values.append(["block", block.feature_id, block.sample])
-
-    return HoverTraceData(
-        x=x_values,
-        y=y_values,
-        text=text_values,
-        customdata=customdata_values,
-    )
-
-
-def build_snp_line_trace_coordinates(snps: list[SnpFeature]) -> TraceCoordinates:
-    """Build grouped coordinates for visible SNP vertical segments."""
-    x_values: list[int | None] = []
-    y_values: list[float | None] = []
-
-    for snp in snps:
-        x_values.extend([snp.pos_in_zone, snp.pos_in_zone, None])
-        y_values.extend([SNP_Y0, SNP_Y1, None])
-
-    return TraceCoordinates(x=x_values, y=y_values)
-
-
-def build_snp_hover_trace_data(snps: list[SnpFeature]) -> HoverTraceData:
-    """Build invisible SNP hover markers."""
-    x_values: list[int] = []
-    y_values: list[float] = []
-    text_values: list[str] = []
-    customdata_values: list[list[str]] = []
-
-    for snp in snps:
-        x_values.append(snp.pos_in_zone)
-        y_values.append((SNP_Y0 + SNP_Y1) / 2.0)
-        text_values.append(
-            "<br>".join(
-                [
-                    f"sample: {snp.sample}",
-                    f"block: {snp.block_id}",
-                    f"aln_pos: {snp.aln_pos}",
-                    f"nt: {snp.nt}",
-                    f"pos_in_block: {snp.pos_in_block}",
-                    f"pos_in_zone: {snp.pos_in_zone}",
-                    f"pos_in_source_seq: {snp.pos_in_source_seq}",
-                ]
-            )
-        )
-        customdata_values.append(["snp", snp.feature_id, snp.sample])
-
-    return HoverTraceData(
-        x=x_values,
-        y=y_values,
-        text=text_values,
-        customdata=customdata_values,
-    )
-
-
-def add_zone_trace(figure: go.Figure, row: int, sample_data: SampleData) -> None:
-    """Add the zone outline."""
-    figure.add_trace(
-        go.Scatter(
-            x=[1, sample_data.zone_length, sample_data.zone_length, 1, 1],
-            y=[ZONE_Y0, ZONE_Y0, ZONE_Y1, ZONE_Y1, ZONE_Y0],
-            mode="lines",
-            line=dict(color="black", width=1),
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def add_block_fill_trace(figure: go.Figure, row: int, sample_data: SampleData) -> None:
-    """Add visible block fills."""
-    if not sample_data.blocks:
-        return
-
-    coordinates = build_block_fill_trace_coordinates(sample_data.blocks)
-    figure.add_trace(
-        go.Scatter(
-            x=coordinates.x,
-            y=coordinates.y,
-            mode="lines",
-            fill="toself",
-            fillcolor=BLOCK_FILL_COLOR,
-            line=dict(width=0),
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def add_block_hover_trace(figure: go.Figure, row: int, sample_data: SampleData) -> None:
-    """Add invisible block hover markers."""
-    if not sample_data.blocks:
-        return
-
-    hover_data = build_block_hover_trace_data(sample_data.blocks)
-    figure.add_trace(
-        go.Scatter(
-            x=hover_data.x,
-            y=hover_data.y,
-            mode="markers",
-            marker=dict(size=14, color=BLOCK_HOVER_MARKER_COLOR),
-            text=hover_data.text,
-            customdata=hover_data.customdata,
-            hovertemplate="%{text}<extra></extra>",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def add_snp_line_trace(figure: go.Figure, row: int, sample_data: SampleData) -> None:
-    """Add visible SNP segments."""
-    if not sample_data.snps:
-        return
-
-    coordinates = build_snp_line_trace_coordinates(sample_data.snps)
-    figure.add_trace(
-        go.Scatter(
-            x=coordinates.x,
-            y=coordinates.y,
-            mode="lines",
-            line=dict(color=SNP_COLOR, width=2),
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def add_snp_hover_trace(figure: go.Figure, row: int, sample_data: SampleData) -> None:
-    """Add invisible SNP hover markers."""
-    if not sample_data.snps:
-        return
-
-    hover_data = build_snp_hover_trace_data(sample_data.snps)
-    figure.add_trace(
-        go.Scatter(
-            x=hover_data.x,
-            y=hover_data.y,
-            mode="markers",
-            marker=dict(size=12, color=SNP_HOVER_MARKER_COLOR),
-            text=hover_data.text,
-            customdata=hover_data.customdata,
-            hovertemplate="%{text}<extra></extra>",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def add_block_highlight_trace(figure: go.Figure, row: int) -> None:
-    """Add an initially empty block highlight trace."""
-    figure.add_trace(
-        go.Scatter(
-            x=[],
-            y=[],
-            mode="lines",
-            line=dict(color=HIGHLIGHT_COLOR, width=3),
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def add_snp_highlight_trace(figure: go.Figure, row: int) -> None:
-    """Add an initially empty SNP highlight trace."""
-    figure.add_trace(
-        go.Scatter(
-            x=[],
-            y=[],
-            mode="lines",
-            line=dict(color=HIGHLIGHT_COLOR, width=5),
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-        row=row,
-        col=1,
-    )
-
-
-def build_plot(data: list[SampleData]) -> go.Figure:
-    """Build the full multi-sample Plotly figure."""
-    figure = make_subplots(
-        rows=len(data),
-        cols=1,
-        shared_xaxes=False,
-        vertical_spacing=VERTICAL_SPACING,
-        subplot_titles=[sample.sample for sample in data],
-    )
-
-    for row_index, sample_data in enumerate(data, start=1):
-        add_zone_trace(figure, row_index, sample_data)
-        add_block_fill_trace(figure, row_index, sample_data)
-        add_snp_line_trace(figure, row_index, sample_data)
-        add_block_hover_trace(figure, row_index, sample_data)
-        add_snp_hover_trace(figure, row_index, sample_data)
-        add_block_highlight_trace(figure, row_index)
-        add_snp_highlight_trace(figure, row_index)
-
-        figure.update_xaxes(
-            range=[1, sample_data.zone_length],
-            row=row_index,
-            col=1,
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            ticks="inside",
-            title_text="Position in zone (bp)",
-        )
-        figure.update_yaxes(
-            visible=False,
-            range=[-0.05, 1.05],
-            row=row_index,
-            col=1,
-        )
-
-    figure.update_layout(
-        height=max(450, PANEL_HEIGHT_PX * len(data)),
-        showlegend=False,
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        hovermode="closest",
-        margin=dict(l=60, r=30, t=70, b=40),
-        title="Region overview",
-    )
-    return figure
-
-
-def build_highlight_payload(data: list[SampleData]) -> dict[str, list[HighlightEntry]]:
-    """Build the synchronized highlight payload used by the injected JS."""
-    payload: dict[str, list[HighlightEntry]] = {}
-
-    for sample_data in data:
-        for block in sample_data.blocks:
-            payload.setdefault(block.feature_id, []).append(
-                HighlightEntry(
-                    sample=block.sample,
-                    feature_type="block",
-                    feature_id=block.feature_id,
-                    label=block.block_id,
-                    x0=block.start,
-                    x1=block.end,
-                    y0=BLOCK_Y0,
-                    y1=BLOCK_Y1,
-                    info={
-                        "sample": block.sample,
+    return {
+        "title": "Region overview",
+        "max_zone_length": max_zone_length,
+        "samples": [
+            {
+                "sample": sample.sample,
+                "zone_length": sample.zone_length,
+                "blocks": [
+                    {
+                        "feature_id": block.feature_id,
                         "block_id": block.block_id,
                         "start": block.start,
                         "end": block.end,
-                        "length": block.length,
-                    },
-                )
-            )
-
-        for snp in sample_data.snps:
-            payload.setdefault(snp.feature_id, []).append(
-                HighlightEntry(
-                    sample=snp.sample,
-                    feature_type="snp",
-                    feature_id=snp.feature_id,
-                    label=f"{snp.block_id}:{snp.aln_pos}",
-                    x0=snp.pos_in_zone,
-                    x1=snp.pos_in_zone,
-                    y0=SNP_Y0,
-                    y1=SNP_Y1,
-                    info={
-                        "sample": snp.sample,
+                    }
+                    for block in sample.blocks
+                ],
+                "snps": [
+                    {
+                        "feature_id": snp.feature_id,
                         "block_id": snp.block_id,
                         "aln_pos": snp.aln_pos,
                         "nt": snp.nt,
                         "pos_in_block": snp.pos_in_block,
                         "pos_in_zone": snp.pos_in_zone,
                         "pos_in_source_seq": snp.pos_in_source_seq,
-                    },
-                )
-            )
-
-    return payload
-
-
-def serialize_highlight_payload(
-    payload: dict[str, list[HighlightEntry]],
-) -> dict[str, list[dict[str, int | float | str | dict[str, int | str]]]]:
-    """Convert highlight entries to JSON-serializable dictionaries."""
-    serializable: dict[str, list[dict[str, int | float | str | dict[str, int | str]]]] = {}
-
-    for feature_id, entries in payload.items():
-        serializable[feature_id] = [
-            {
-                "sample": entry.sample,
-                "feature_type": entry.feature_type,
-                "feature_id": entry.feature_id,
-                "label": entry.label,
-                "x0": entry.x0,
-                "x1": entry.x1,
-                "y0": entry.y0,
-                "y1": entry.y1,
-                "info": entry.info,
+                    }
+                    for snp in sample.snps
+                ],
             }
-            for entry in entries
-        ]
-
-    return serializable
-
-
-def build_post_script(
-    highlight_payload: dict[str, list[HighlightEntry]],
-    sample_names: list[str],
-) -> str:
-    """Build the injected JavaScript used for synchronized highlight and info display."""
-    payload_json = json.dumps(serialize_highlight_payload(highlight_payload))
-    sample_names_json = json.dumps(sample_names)
-
-    return f"""
-(function() {{
-  const gd = document.getElementById('{{plot_id}}');
-  const payload = {payload_json};
-  const sampleNames = {sample_names_json};
-
-  const plotWrapper = gd.parentNode;
-  plotWrapper.style.display = 'flex';
-  plotWrapper.style.flexDirection = 'row';
-  plotWrapper.style.alignItems = 'flex-start';
-  plotWrapper.style.gap = '20px';
-
-  const infoBox = document.createElement('div');
-  infoBox.id = 'feature-info-panel';
-  infoBox.style.width = '360px';
-  infoBox.style.minWidth = '360px';
-  infoBox.style.maxHeight = '90vh';
-  infoBox.style.overflowY = 'auto';
-  infoBox.style.padding = '12px';
-  infoBox.style.border = '1px solid #cccccc';
-  infoBox.style.borderRadius = '8px';
-  infoBox.style.background = '#fafafa';
-  infoBox.style.fontFamily = 'sans-serif';
-  infoBox.style.fontSize = '13px';
-  infoBox.innerHTML = '<b>Feature info</b><br><br>Hover a SNP or a block to highlight it across all samples.';
-  plotWrapper.appendChild(infoBox);
-
-  const blockHighlightTraceIndices = [];
-  const snpHighlightTraceIndices = [];
-  const sampleToPanelIndex = {{}};
-
-  let snpHoverCount = 0;
-  let blockHoverCount = 0;
-  let snpHighlightCount = 0;
-  let blockHighlightCount = 0;
-
-  gd.data.forEach((trace, index) => {{
-    const traceName = trace.name || '';
-    const traceMode = trace.mode || '';
-    if (traceMode === 'markers' && Array.isArray(trace.customdata) && trace.customdata.length > 0) {{
-      const first = trace.customdata[0];
-      if (Array.isArray(first) && first.length >= 3) {{
-        const featureType = first[0];
-        const sample = first[2];
-        if (!(sample in sampleToPanelIndex)) {{
-          sampleToPanelIndex[sample] = Object.keys(sampleToPanelIndex).length;
-        }}
-        if (featureType === 'snp') {{
-          snpHoverCount += 1;
-        }}
-        if (featureType === 'block') {{
-          blockHoverCount += 1;
-        }}
-      }}
-    }}
-
-    if (traceMode === 'lines' && Array.isArray(trace.x) && trace.x.length === 0) {{
-      if (trace.line && trace.line.width === 5) {{
-        snpHighlightTraceIndices.push(index);
-        snpHighlightCount += 1;
-      }}
-      if (trace.line && trace.line.width === 3) {{
-        blockHighlightTraceIndices.push(index);
-        blockHighlightCount += 1;
-      }}
-    }}
-  }});
-
-  function getHighlightTraceIndex(featureType, panelIndex) {{
-    if (featureType === 'snp') {{
-      return snpHighlightTraceIndices[panelIndex];
-    }}
-    return blockHighlightTraceIndices[panelIndex];
-  }}
-
-  function buildRectangleCoordinates(entry) {{
-    return {{
-      x: [entry.x0, entry.x0, entry.x1, entry.x1, entry.x0, null],
-      y: [entry.y0, entry.y1, entry.y1, entry.y0, entry.y0, null]
-    }};
-  }}
-
-  function buildSegmentCoordinates(entry) {{
-    return {{
-      x: [entry.x0, entry.x1, null],
-      y: [entry.y0, entry.y1, null]
-    }};
-  }}
-
-  function clearHighlights() {{
-    const indices = blockHighlightTraceIndices.concat(snpHighlightTraceIndices);
-    const xUpdate = indices.map(() => []);
-    const yUpdate = indices.map(() => []);
-    Plotly.restyle(gd, {{ x: xUpdate, y: yUpdate }}, indices);
-  }}
-
-  function escapeHtml(text) {{
-    return String(text)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;');
-  }}
-
-  function renderInfo(featureType, featureId) {{
-    const entries = payload[featureId] || [];
-    if (entries.length === 0) {{
-      infoBox.innerHTML = '<b>Feature info</b><br><br>No data available.';
-      return;
-    }}
-
-    const title = featureType === 'snp' ? 'SNP' : 'Block';
-    let html = `<b>${{title}}</b><br><br>`;
-    html += `<b>ID:</b> ${{escapeHtml(entries[0].label)}}<br><br>`;
-
-    const entryBySample = {{}};
-    entries.forEach(entry => {{
-      entryBySample[entry.sample] = entry;
-    }});
-
-    sampleNames.forEach(sample => {{
-      html += `<div style="margin-bottom:10px;padding:8px;border:1px solid #dddddd;border-radius:6px;background:white;">`;
-      html += `<b>${{escapeHtml(sample)}}</b><br>`;
-      if (!(sample in entryBySample)) {{
-        html += 'No corresponding feature in this sample.';
-      }} else {{
-        const info = entryBySample[sample].info;
-        Object.entries(info).forEach(([key, value]) => {{
-          html += `${{escapeHtml(key)}}: ${{escapeHtml(value)}}<br>`;
-        }});
-      }}
-      html += `</div>`;
-    }});
-
-    infoBox.innerHTML = html;
-  }}
-
-  function applyHighlight(featureType, featureId) {{
-    const entries = payload[featureId] || [];
-    clearHighlights();
-    renderInfo(featureType, featureId);
-
-    const xMap = new Map();
-    const yMap = new Map();
-
-    entries.forEach(entry => {{
-      const panelIndex = sampleToPanelIndex[entry.sample];
-      const traceIndex = getHighlightTraceIndex(featureType, panelIndex);
-      let coords = null;
-
-      if (featureType === 'snp') {{
-        coords = buildSegmentCoordinates(entry);
-      }} else {{
-        coords = buildRectangleCoordinates(entry);
-      }}
-
-      xMap.set(traceIndex, coords.x);
-      yMap.set(traceIndex, coords.y);
-    }});
-
-    const traceIndices = Array.from(xMap.keys());
-    const xUpdate = traceIndices.map(index => xMap.get(index));
-    const yUpdate = traceIndices.map(index => yMap.get(index));
-    Plotly.restyle(gd, {{ x: xUpdate, y: yUpdate }}, traceIndices);
-  }}
-
-  gd.on('plotly_hover', function(eventData) {{
-    if (!eventData || !eventData.points || eventData.points.length === 0) {{
-      return;
-    }}
-
-    const point = eventData.points[0];
-    if (!point.customdata || point.customdata.length < 2) {{
-      return;
-    }}
-
-    const featureType = point.customdata[0];
-    const featureId = point.customdata[1];
-    applyHighlight(featureType, featureId);
-  }});
-
-  gd.on('plotly_unhover', function() {{
-    clearHighlights();
-    infoBox.innerHTML = '<b>Feature info</b><br><br>Hover a SNP or a block to highlight it across all samples.';
-  }});
-}})();
-"""
+            for sample in sample_data
+        ],
+    }
 
 
-def write_html_with_js(
-    figure: go.Figure,
-    output_path: Path,
-    highlight_payload: dict[str, list[HighlightEntry]],
-) -> None:
-    """Write the HTML file with injected JavaScript."""
-    sample_names = []
-    subplot_titles = figure.layout.annotations or []
-    for annotation in subplot_titles:
-        if hasattr(annotation, "text"):
-            sample_names.append(str(annotation.text))
+def build_config_payload() -> dict[str, object]:
+    """Build the JavaScript config payload."""
+    return {
+        "minWidth": VIEWER_MIN_WIDTH,
+        "leftMargin": LEFT_MARGIN,
+        "rightMargin": RIGHT_MARGIN,
+        "topMargin": TOP_MARGIN,
+        "bottomMargin": BOTTOM_MARGIN,
+        "panelHeight": PANEL_HEIGHT,
+        "panelGap": PANEL_GAP,
+        "trackY": TRACK_Y_OFFSET,
+        "trackHeight": TRACK_HEIGHT,
+        "featureHeight": FEATURE_HEIGHT,
+        "snpHeight": SNP_HEIGHT,
+        "axisTicks": 6,
+        "snpStrokeWidth": SNP_LINE_WIDTH,
+        "blockFill": "rgba(160,160,160,0.65)",
+        "snpColor": "rgb(220,0,0)",
+        "highlightColor": "rgb(0,120,255)",
+    }
 
-    post_script = build_post_script(highlight_payload, sample_names)
-    html = figure.to_html(
-        include_plotlyjs=True,
-        full_html=True,
-        post_script=post_script,
-        div_id="region-overview-plot",
-    )
+
+def build_html(region_data: dict[str, object]) -> str:
+    """Render the final HTML document."""
+    return HTML_TEMPLATE % {
+        "region_data": json.dumps(region_data),
+        "config": json.dumps(build_config_payload()),
+        "sidebar_width": SIDEBAR_WIDTH,
+    }
+
+
+def write_html(html: str, output_path: Path) -> None:
+    """Write the final HTML file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
     LOGGER.info("Wrote %s", output_path)
@@ -932,14 +982,14 @@ def main() -> None:
     args = parse_args()
     setup_logging(args.log_level)
 
-    plotter = RegionOverviewPlotter(
+    builder = RegionOverviewBuilder(
         samples_tsv_path=args.samples_tsv,
         blocks_gff_path=args.blocks_gff,
         snp_long_path=args.snp_long,
         fasta_dir=args.fasta_dir,
         output_path=args.output,
     )
-    plotter.run()
+    builder.run()
 
 
 if __name__ == "__main__":

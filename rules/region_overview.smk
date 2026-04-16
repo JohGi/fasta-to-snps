@@ -14,7 +14,7 @@ rule plot_region_overview:
     shell:
         r"""
         mkdir -p "{REGION_TRACK_DIR}" "$(dirname "{log.stdout}")"
-        python3 "{SCRIPTS_DIR}/plot_region_overview2.py" \
+        python3 "{SCRIPTS_DIR}/plot_region_overview.py" \
             --samples-tsv "{input.samples_tsv}" \
             --blocks-gff "{input.blocks_gff}" \
             --snp-long "{input.snp_long}" \
