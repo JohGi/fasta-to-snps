@@ -6,23 +6,29 @@ from __future__ import annotations
 from .models import BlockFeature, SampleData, SampleRecord, SnpFeature
 
 from .constants import (
+    BLOCK_FILL,
     BOTTOM_MARGIN,
     FEATURE_HEIGHT,
+    HIGHLIGHT_COLOR,
+    BP_TO_KB_THRESHOLD_BP,
+    KB_TO_MB_THRESHOLD_BP,
     LEFT_MARGIN,
+    MAX_ZOOM_CAP,
     PANEL_GAP,
     PANEL_HEIGHT,
     RIGHT_MARGIN,
+    END_PADDING_PX,
+    SNP_COLOR,
     SNP_HEIGHT,
     SNP_LINE_WIDTH,
+    TARGET_TICK_SPACING_PX,
+    TARGET_VISIBLE_BP,
     TOP_MARGIN,
     TRACK_HEIGHT,
     TRACK_Y_OFFSET,
     VIEWER_MIN_WIDTH,
-    TARGET_VISIBLE_BP,
+    VIEWER_TOP_UI_HEIGHT,
     ZOOM_STEPS,
-    MAX_ZOOM_CAP,
-    TARGET_TICK_SPACING_PX,
-    VIEWER_TOP_UI_HEIGHT
 )
 
 def build_sample_data(
@@ -96,27 +102,29 @@ def build_region_payload(sample_data: list[SampleData]) -> dict[str, object]:
 
 
 def build_config_payload() -> dict[str, object]:
-    """Build the JavaScript config payload."""
+    """Build the viewer configuration payload."""
     return {
         "minWidth": VIEWER_MIN_WIDTH,
         "leftMargin": LEFT_MARGIN,
         "rightMargin": RIGHT_MARGIN,
         "topMargin": TOP_MARGIN,
         "bottomMargin": BOTTOM_MARGIN,
+        "endPaddingPx": END_PADDING_PX,
         "panelHeight": PANEL_HEIGHT,
         "panelGap": PANEL_GAP,
         "trackY": TRACK_Y_OFFSET,
         "trackHeight": TRACK_HEIGHT,
         "featureHeight": FEATURE_HEIGHT,
         "snpHeight": SNP_HEIGHT,
-        "axisTicks": 6,
         "snpStrokeWidth": SNP_LINE_WIDTH,
-        "targetVisibleBp": TARGET_VISIBLE_BP,
-        "zoomSteps": ZOOM_STEPS,
-        "maxZoomCap": MAX_ZOOM_CAP,
-        "targetTickSpacingPx": TARGET_TICK_SPACING_PX,
+        "blockFill": BLOCK_FILL,
+        "snpColor": SNP_COLOR,
+        "highlightColor": HIGHLIGHT_COLOR,
         "viewerTopUiHeight": VIEWER_TOP_UI_HEIGHT,
-        "blockFill": "rgba(160,160,160,0.65)",
-        "snpColor": "rgb(220,0,0)",
-        "highlightColor": "rgb(0,120,255)",
+        "targetVisibleBp": TARGET_VISIBLE_BP,
+        "targetTickSpacingPx": TARGET_TICK_SPACING_PX,
+        "bpToKbThresholdBp": BP_TO_KB_THRESHOLD_BP,
+        "kbToMbThresholdBp": KB_TO_MB_THRESHOLD_BP,
+        "maxZoomCap": MAX_ZOOM_CAP,
+        "zoomSteps": ZOOM_STEPS,
     }

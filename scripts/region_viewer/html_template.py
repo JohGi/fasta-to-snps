@@ -65,6 +65,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       align-items: flex-start;
       gap: 16px;
       width: 100%%;
+      min-width: 0;
     }
 
     .viewer-column {
@@ -77,6 +78,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .viewer-wrapper {
       position: relative;
       width: 100%%;
+      min-width: 0;
     }
 
     .viewer-toolbar {
@@ -116,14 +118,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border: 1px solid var(--border);
       border-radius: 10px;
       background: white;
-      overflow: auto;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      cursor: default;
     }
 
     .sidebar {
       flex: 0 0 %(sidebar_width)spx;
       width: %(sidebar_width)spx;
+      min-width: %(sidebar_width)spx;
+      max-width: %(sidebar_width)spx;
       max-height: 80vh;
-      overflow-y: auto;
+      overflow-y: scroll;
+      scrollbar-gutter: stable;
       padding: 14px;
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -196,12 +204,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     const REGION_DATA = %(region_data)s;
     const CONFIG = %(config)s;
 
+    const SCROLLBAR = {
+      height: 18,
+      bottomPadding: 10,
+      minThumbWidth: 36,
+      trackInset: 8
+    };
+
     const state = {
       hoveredFeatureId: null,
       hoveredFeatureType: null,
       featureGroups: new Map(),
       highlightNodes: new Map(),
-      zoomX: 1
+      zoomX: 1,
+      scrollX: 0,
+      isDraggingViewport: false,
+      dragStartPointerX: 0,
+      dragStartScrollX: 0,
+      isDraggingScrollbar: false,
+      scrollbarDragOffsetX: 0,
+      suppressHover: false
     };
 
     function buildFeatureGroups(data) {
@@ -312,6 +334,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .replaceAll(">", "&gt;");
     }
 
+    function clearHighlightMap() {
+      state.highlightNodes = new Map();
+    }
+
     function setHighlight(featureType, featureId) {
       clearHighlight();
       state.hoveredFeatureType = featureType;
@@ -339,6 +365,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       stage.batchDraw();
     }
 
+    function reapplyHighlightIfVisible() {
+      if (!state.hoveredFeatureId || !state.hoveredFeatureType) {
+        return;
+      }
+
+      const nodes = state.highlightNodes.get(state.hoveredFeatureId) || [];
+      if (nodes.length === 0) {
+        renderSidebarDefault();
+        return;
+      }
+
+      for (const node of nodes) {
+        node.visible(true);
+      }
+    }
+
     function addHighlightNode(featureId, node) {
       if (!state.highlightNodes.has(featureId)) {
         state.highlightNodes.set(featureId, []);
@@ -348,30 +390,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function attachInteraction(node, featureType, featureId) {
       node.on("mouseenter", () => {
+        if (state.suppressHover) {
+          return;
+        }
         document.body.style.cursor = "pointer";
         setHighlight(featureType, featureId);
       });
 
       node.on("mouseleave", () => {
+        if (state.suppressHover) {
+          return;
+        }
         document.body.style.cursor = "default";
         clearHighlight();
       });
     }
 
-    function getBaseViewerWidth() {
-      const viewerElement = document.getElementById("viewer");
+    function getViewerElement() {
+      return document.getElementById("viewer");
+    }
+
+    function getStageWidth() {
+      const viewerElement = getViewerElement();
       return Math.max(CONFIG.minWidth, viewerElement.clientWidth);
     }
 
+    function getViewportTrackWidth() {
+      return getStageWidth() - CONFIG.leftMargin - CONFIG.rightMargin;
+    }
+
+    function getDrawableTrackWidth() {
+      return Math.max(1, getViewportTrackWidth() - CONFIG.endPaddingPx);
+    }
+
+    function getContentWidth() {
+      return getDrawableTrackWidth() * state.zoomX;
+    }
+
+    function getMaxScrollX() {
+      return Math.max(0, getContentWidth() - getDrawableTrackWidth());
+    }
+
+    function clampScrollX(value) {
+      return Math.max(0, Math.min(getMaxScrollX(), value));
+    }
+
+    function normalizeScrollX() {
+      state.scrollX = clampScrollX(state.scrollX);
+    }
+
     function getInitialZoomX() {
-      const viewerElement = document.getElementById("viewer");
-      const availableWidth = viewerElement.clientWidth;
-
-      if (availableWidth <= 0) {
-        return 1;
-      }
-
-      return availableWidth / getBaseViewerWidth();
+      return 1;
     }
 
     function getMaxZoomX() {
@@ -384,12 +453,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return Math.pow(maxZoom / getInitialZoomX(), 1 / CONFIG.zoomSteps);
     }
 
-    function getStageWidth() {
-      return getBaseViewerWidth() * state.zoomX;
+    function getVisibleBpSpan() {
+      return REGION_DATA.max_zone_length / state.zoomX;
     }
 
-    function computeTrackWidth() {
-      return getStageWidth() - CONFIG.leftMargin - CONFIG.rightMargin;
+    function getMaxVisibleStartBp() {
+      return Math.max(1, REGION_DATA.max_zone_length - getVisibleBpSpan() + 1);
+    }
+
+    function getVisibleStartBp() {
+      const maxScroll = getMaxScrollX();
+
+      if (maxScroll <= 0) {
+        return 1;
+      }
+
+      const scrollRatio = state.scrollX / maxScroll;
+      return 1 + scrollRatio * (getMaxVisibleStartBp() - 1);
+    }
+
+    function getVisibleEndBp() {
+      return Math.min(
+        REGION_DATA.max_zone_length,
+        getVisibleStartBp() + getVisibleBpSpan() - 1
+      );
+    }
+
+    function setVisibleStartBp(targetStartBp) {
+      const clampedStart = Math.max(1, Math.min(getMaxVisibleStartBp(), targetStartBp));
+      const maxScroll = getMaxScrollX();
+
+      if (maxScroll <= 0) {
+        state.scrollX = 0;
+        return;
+      }
+
+      const startRatio = (clampedStart - 1) / Math.max(1, getMaxVisibleStartBp() - 1);
+      state.scrollX = startRatio * maxScroll;
+      normalizeScrollX();
     }
 
     function computePanelTop(panelIndex) {
@@ -397,25 +498,77 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         + panelIndex * (CONFIG.panelHeight + CONFIG.panelGap);
     }
 
-    function scaleX(position) {
-      const trackWidth = computeTrackWidth();
-      const globalLength = REGION_DATA.max_zone_length;
-
-      if (globalLength <= 1) {
-        return CONFIG.leftMargin;
-      }
-
-      return CONFIG.leftMargin + ((position - 1) / (globalLength - 1)) * trackWidth;
+    function getScrollbarY() {
+      return contentHeight - SCROLLBAR.bottomPadding - SCROLLBAR.height;
     }
 
-    function formatBp(value) {
-      if (value >= 1000000) {
-        return `${(value / 1000000).toFixed(1)} Mb`;
+    function getWorldToScreenScale() {
+      const visibleSpan = getVisibleBpSpan();
+      const drawableWidth = getDrawableTrackWidth();
+
+      if (visibleSpan <= 1) {
+        return 0;
       }
-      if (value >= 1000) {
-        return `${(value / 1000).toFixed(1)} kb`;
+
+      return drawableWidth / (visibleSpan - 1);
+    }
+
+    function worldXToScreenX(position) {
+      const visibleStart = getVisibleStartBp();
+      return CONFIG.leftMargin + (position - visibleStart) * getWorldToScreenScale();
+    }
+
+    function screenXToWorldX(screenX) {
+      const clampedX = Math.max(
+        CONFIG.leftMargin,
+        Math.min(CONFIG.leftMargin + getDrawableTrackWidth(), screenX)
+      );
+      const visibleStart = getVisibleStartBp();
+      return visibleStart + (clampedX - CONFIG.leftMargin) / getWorldToScreenScale();
+    }
+
+    function formatNumber(value, decimals = 0) {
+      const fixed = value.toFixed(decimals);
+      const parts = fixed.split(".");
+
+      if (parts.length === 1) {
+        return parts[0];
       }
-      return `${value} bp`;
+
+      const trimmedFraction = parts[1].replace(/0+$/, "");
+      if (trimmedFraction === "") {
+        return parts[0];
+      }
+
+      return `${parts[0]}.${trimmedFraction}`;
+    }
+
+    function getAxisUnit() {
+      const visibleSpan = getVisibleBpSpan();
+
+      if (visibleSpan <= CONFIG.bpToKbThresholdBp) {
+        return "bp";
+      }
+
+      if (visibleSpan <= CONFIG.kbToMbThresholdBp) {
+        return "kb";
+      }
+
+      return "Mb";
+    }
+
+    function formatAxisValue(value) {
+      const unit = getAxisUnit();
+
+      if (unit === "bp") {
+        return `${formatNumber(value, 0)} bp`;
+      }
+
+      if (unit === "kb") {
+        return `${formatNumber(value / 1000, 1)} kb`;
+      }
+
+      return `${formatNumber(value / 1000000, 3)} Mb`;
     }
 
     function niceStep(value) {
@@ -440,11 +593,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return niceFraction * Math.pow(10, exponent);
     }
 
+    function intersectsRange(start, end, visibleStart, visibleEnd) {
+      return end >= visibleStart && start <= visibleEnd;
+    }
+
+    function isPositionVisible(position, visibleStart, visibleEnd) {
+      return position >= visibleStart && position <= visibleEnd;
+    }
+
     function drawGlobalAxis(layer) {
       const x0 = CONFIG.leftMargin;
-      const x1 = CONFIG.leftMargin + computeTrackWidth();
+      const x1 = CONFIG.leftMargin + getDrawableTrackWidth();
       const axisY = CONFIG.viewerTopUiHeight + 24;
-      const trackWidth = computeTrackWidth();
 
       const axis = new Konva.Line({
         points: [x0, axisY, x1, axisY],
@@ -454,13 +614,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
       layer.add(axis);
 
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+      const visibleSpan = Math.max(1, visibleEnd - visibleStart + 1);
+
       const targetPx = CONFIG.targetTickSpacingPx;
-      const bpPerPixel = REGION_DATA.max_zone_length / trackWidth;
+      const bpPerPixel = visibleSpan / Math.max(1, getDrawableTrackWidth());
       const rawStep = bpPerPixel * targetPx;
       const step = niceStep(rawStep);
 
-      for (let value = step; value <= REGION_DATA.max_zone_length; value += step) {
-        const x = scaleX(value);
+      const firstTick = Math.ceil(visibleStart / step) * step;
+
+      for (let value = firstTick; value <= visibleEnd; value += step) {
+        const x = worldXToScreenX(value);
 
         const tick = new Konva.Line({
           points: [x, axisY, x, axisY + 6],
@@ -473,7 +639,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           x: x - 30,
           y: axisY - 18,
           width: 60,
-          text: formatBp(value),
+          text: formatAxisValue(value),
           fontSize: 10,
           fill: "#555555",
           align: "center",
@@ -500,8 +666,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function drawSampleOutline(layer, sample, panelTop) {
-      const x0 = CONFIG.leftMargin;
-      const x1 = scaleX(sample.zone_length);
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      if (!intersectsRange(1, sample.zone_length, visibleStart, visibleEnd)) {
+        return;
+      }
+
+      const clippedStart = Math.max(1, visibleStart);
+      const clippedEnd = Math.min(sample.zone_length, visibleEnd);
+
+      if (clippedEnd < clippedStart) {
+        return;
+      }
+
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
       const y0 = panelTop + CONFIG.trackY;
       const width = Math.max(1, x1 - x0);
 
@@ -518,32 +698,70 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function getFeatureY(panelTop) {
-      return panelTop + CONFIG.trackY + (CONFIG.trackHeight - CONFIG.featureHeight) / 2;
+      return panelTop + CONFIG.trackY + 1;
     }
 
     function getSnpY(panelTop) {
-      return panelTop + CONFIG.trackY + (CONFIG.trackHeight - CONFIG.snpHeight) / 2;
+      return panelTop + CONFIG.trackY;
     }
 
-    function createBlockShape(sample, feature, panelTop) {
-      const x0 = scaleX(feature.start);
-      const x1 = scaleX(feature.end);
+    function getBlockGeometry(feature, panelTop) {
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      const clippedStart = Math.max(feature.start, visibleStart);
+      const clippedEnd = Math.min(feature.end, visibleEnd);
+
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
       const y0 = getFeatureY(panelTop);
 
-      return new Konva.Rect({
+      return {
         x: x0,
         y: y0,
         width: Math.max(1, x1 - x0),
-        height: CONFIG.featureHeight,
+        height: CONFIG.featureHeight
+      };
+    }
+
+    function createBlockShape(feature, panelTop) {
+      const geometry = getBlockGeometry(feature, panelTop);
+
+      return new Konva.Rect({
+        x: geometry.x,
+        y: geometry.y,
+        width: geometry.width,
+        height: geometry.height,
         fill: CONFIG.blockFill,
         strokeWidth: 0,
         listening: false
       });
     }
 
-    function createBlockHitbox(sample, feature, panelTop) {
-      const x0 = scaleX(feature.start);
-      const x1 = scaleX(feature.end);
+    function createBlockHighlight(feature, panelTop) {
+      const geometry = getBlockGeometry(feature, panelTop);
+
+      return new Konva.Rect({
+        x: geometry.x,
+        y: geometry.y,
+        width: geometry.width,
+        height: geometry.height,
+        fill: CONFIG.highlightColor,
+        strokeWidth: 0,
+        visible: false,
+        listening: false
+      });
+    }
+
+    function createBlockHitbox(feature, panelTop) {
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      const clippedStart = Math.max(feature.start, visibleStart);
+      const clippedEnd = Math.min(feature.end, visibleEnd);
+
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
       const y0 = panelTop + CONFIG.trackY;
 
       return new Konva.Rect({
@@ -555,25 +773,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
     }
 
-    function createBlockHighlight(sample, feature, panelTop) {
-      const x0 = scaleX(feature.start);
-      const x1 = scaleX(feature.end);
-      const y0 = getFeatureY(panelTop);
-
-      return new Konva.Rect({
-        x: x0,
-        y: y0,
-        width: Math.max(1, x1 - x0),
-        height: CONFIG.featureHeight,
-        stroke: CONFIG.highlightColor,
-        strokeWidth: 1.5,
-        visible: false,
-        listening: false
-      });
-    }
-
-    function createSnpLine(sample, feature, panelTop) {
-      const x = scaleX(feature.pos_in_zone);
+    function createSnpLine(feature, panelTop) {
+      const x = worldXToScreenX(feature.pos_in_zone);
       const y0 = getSnpY(panelTop);
       const y1 = y0 + CONFIG.snpHeight;
 
@@ -585,8 +786,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
     }
 
-    function createSnpHitbox(sample, feature, panelTop) {
-      const x = scaleX(feature.pos_in_zone);
+    function createSnpHitbox(feature, panelTop) {
+      const x = worldXToScreenX(feature.pos_in_zone);
       const y0 = panelTop + CONFIG.trackY;
 
       return new Konva.Rect({
@@ -598,8 +799,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
     }
 
-    function createSnpHighlight(sample, feature, panelTop) {
-      const x = scaleX(feature.pos_in_zone);
+    function createSnpHighlight(feature, panelTop) {
+      const x = worldXToScreenX(feature.pos_in_zone);
       const y0 = getSnpY(panelTop);
       const y1 = y0 + CONFIG.snpHeight;
 
@@ -612,44 +813,208 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
     }
 
-    function drawSample(featureLayer, interactionLayer, highlightLayer, sample, panelIndex) {
+    function drawSample(
+      blockLayer,
+      blockHighlightLayer,
+      snpLayer,
+      snpHighlightLayer,
+      interactionLayer,
+      sample,
+      panelIndex
+    ) {
       const panelTop = computePanelTop(panelIndex);
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
 
-      drawSampleLabel(featureLayer, panelTop, sample.sample);
-      drawSampleOutline(featureLayer, sample, panelTop);
+      drawSampleLabel(blockLayer, panelTop, sample.sample);
+      drawSampleOutline(blockLayer, sample, panelTop);
 
       for (const block of sample.blocks) {
-        const base = createBlockShape(sample, block, panelTop);
-        const hitbox = createBlockHitbox(sample, block, panelTop);
-        const highlight = createBlockHighlight(sample, block, panelTop);
+        if (!intersectsRange(block.start, block.end, visibleStart, visibleEnd)) {
+          continue;
+        }
 
-        featureLayer.add(base);
+        const base = createBlockShape(block, panelTop);
+        const hitbox = createBlockHitbox(block, panelTop);
+        const highlight = createBlockHighlight(block, panelTop);
+
+        blockLayer.add(base);
+        blockHighlightLayer.add(highlight);
         interactionLayer.add(hitbox);
-        highlightLayer.add(highlight);
 
         addHighlightNode(block.feature_id, highlight);
         attachInteraction(hitbox, "block", block.feature_id);
       }
 
       for (const snp of sample.snps) {
-        const base = createSnpLine(sample, snp, panelTop);
-        const hitbox = createSnpHitbox(sample, snp, panelTop);
-        const highlight = createSnpHighlight(sample, snp, panelTop);
+        if (!isPositionVisible(snp.pos_in_zone, visibleStart, visibleEnd)) {
+          continue;
+        }
 
-        featureLayer.add(base);
+        const base = createSnpLine(snp, panelTop);
+        const hitbox = createSnpHitbox(snp, panelTop);
+        const highlight = createSnpHighlight(snp, panelTop);
+
+        snpLayer.add(base);
+        snpHighlightLayer.add(highlight);
         interactionLayer.add(hitbox);
-        highlightLayer.add(highlight);
 
         addHighlightNode(snp.feature_id, highlight);
         attachInteraction(hitbox, "snp", snp.feature_id);
       }
     }
 
+    function getScrollbarMetrics() {
+      const trackX = CONFIG.leftMargin + SCROLLBAR.trackInset;
+      const trackWidth = Math.max(1, getViewportTrackWidth() - 2 * SCROLLBAR.trackInset);
+      const trackY = getScrollbarY();
+      const contentWidth = getContentWidth();
+      const viewportWidth = getDrawableTrackWidth();
+
+      if (contentWidth <= viewportWidth) {
+        return {
+          visible: false,
+          trackX,
+          trackY,
+          trackWidth,
+          thumbX: trackX,
+          thumbWidth: trackWidth
+        };
+      }
+
+      const ratio = viewportWidth / contentWidth;
+      const thumbWidth = Math.max(SCROLLBAR.minThumbWidth, trackWidth * ratio);
+      const maxThumbTravel = Math.max(0, trackWidth - thumbWidth);
+      const scrollRatio = getMaxScrollX() > 0 ? state.scrollX / getMaxScrollX() : 0;
+      const thumbX = trackX + scrollRatio * maxThumbTravel;
+
+      return {
+        visible: true,
+        trackX,
+        trackY,
+        trackWidth,
+        thumbX,
+        thumbWidth
+      };
+    }
+
+    function drawScrollbar(layer) {
+      const metrics = getScrollbarMetrics();
+
+      const track = new Konva.Rect({
+        x: metrics.trackX,
+        y: metrics.trackY,
+        width: metrics.trackWidth,
+        height: SCROLLBAR.height,
+        fill: "#f0f0f0",
+        stroke: "#d0d0d0",
+        cornerRadius: 8,
+        listening: false
+      });
+      layer.add(track);
+
+      const thumb = new Konva.Rect({
+        x: metrics.thumbX,
+        y: metrics.trackY + 1,
+        width: metrics.thumbWidth,
+        height: SCROLLBAR.height - 2,
+        fill: metrics.visible ? "#c2c2c2" : "#e0e0e0",
+        stroke: "#b4b4b4",
+        cornerRadius: 7
+      });
+
+      thumb.on("mouseenter", () => {
+        if (!state.isDraggingViewport && !state.isDraggingScrollbar) {
+          document.body.style.cursor = "grab";
+        }
+      });
+
+      thumb.on("mouseleave", () => {
+        if (!state.isDraggingViewport && !state.isDraggingScrollbar) {
+          document.body.style.cursor = "default";
+        }
+      });
+
+      thumb.on("pointerdown", (event) => {
+        if (!metrics.visible) {
+          return;
+        }
+
+        event.cancelBubble = true;
+        state.isDraggingScrollbar = true;
+        state.suppressHover = true;
+        document.body.style.cursor = "grabbing";
+
+        const pointer = stage.getPointerPosition();
+        state.scrollbarDragOffsetX = pointer.x - metrics.thumbX;
+      });
+
+      layer.add(thumb);
+
+      const clickArea = new Konva.Rect({
+        x: metrics.trackX,
+        y: metrics.trackY,
+        width: metrics.trackWidth,
+        height: SCROLLBAR.height,
+        fill: "rgba(0,0,0,0)"
+      });
+
+      clickArea.on("pointerdown", (event) => {
+        if (!metrics.visible) {
+          return;
+        }
+
+        event.cancelBubble = true;
+        const pointer = stage.getPointerPosition();
+        const centeredThumbX = pointer.x - metrics.thumbWidth / 2;
+        setScrollFromThumbX(centeredThumbX);
+        redrawStage();
+      });
+
+      layer.add(clickArea);
+    }
+
+    function setScrollFromThumbX(thumbX) {
+      const metrics = getScrollbarMetrics();
+      const maxThumbTravel = Math.max(0, metrics.trackWidth - metrics.thumbWidth);
+
+      if (maxThumbTravel <= 0) {
+        state.scrollX = 0;
+        return;
+      }
+
+      const clampedThumbX = Math.max(metrics.trackX, Math.min(metrics.trackX + maxThumbTravel, thumbX));
+      const thumbRatio = (clampedThumbX - metrics.trackX) / maxThumbTravel;
+      state.scrollX = thumbRatio * getMaxScrollX();
+      normalizeScrollX();
+    }
+
+    function zoomAroundViewportCenter(nextZoom) {
+      const previousZoom = state.zoomX;
+      const clampedZoom = Math.max(getInitialZoomX(), Math.min(getMaxZoomX(), nextZoom));
+
+      if (clampedZoom === previousZoom) {
+        return;
+      }
+
+      const oldVisibleStart = getVisibleStartBp();
+      const oldVisibleSpan = getVisibleBpSpan();
+      const centerBp = oldVisibleStart + oldVisibleSpan / 2;
+
+      state.zoomX = clampedZoom;
+
+      const newVisibleSpan = getVisibleBpSpan();
+      const targetVisibleStart = centerBp - newVisibleSpan / 2;
+      setVisibleStartBp(targetVisibleStart);
+    }
+
     const contentHeight = CONFIG.viewerTopUiHeight
       + CONFIG.topMargin
       + REGION_DATA.samples.length * CONFIG.panelHeight
       + Math.max(0, REGION_DATA.samples.length - 1) * CONFIG.panelGap
-      + CONFIG.bottomMargin;
+      + CONFIG.bottomMargin
+      + SCROLLBAR.height
+      + SCROLLBAR.bottomPadding;
 
     const stage = new Konva.Stage({
       container: "viewer",
@@ -658,13 +1023,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     });
 
     const backgroundLayer = new Konva.Layer();
-    const featureLayer = new Konva.Layer();
-    const highlightLayer = new Konva.Layer();
+    const blockLayer = new Konva.Layer();
+    const blockHighlightLayer = new Konva.Layer();
+    const snpLayer = new Konva.Layer();
+    const snpHighlightLayer = new Konva.Layer();
     const interactionLayer = new Konva.Layer();
 
     stage.add(backgroundLayer);
-    stage.add(featureLayer);
-    stage.add(highlightLayer);
+    stage.add(blockLayer);
+    stage.add(blockHighlightLayer);
+    stage.add(snpLayer);
+    stage.add(snpHighlightLayer);
     stage.add(interactionLayer);
 
     function redrawStage() {
@@ -672,11 +1041,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       stage.height(contentHeight);
 
       backgroundLayer.destroyChildren();
-      featureLayer.destroyChildren();
-      highlightLayer.destroyChildren();
+      blockLayer.destroyChildren();
+      blockHighlightLayer.destroyChildren();
+      snpLayer.destroyChildren();
+      snpHighlightLayer.destroyChildren();
       interactionLayer.destroyChildren();
 
-      state.highlightNodes = new Map();
+      clearHighlightMap();
 
       backgroundLayer.add(new Konva.Rect({
         x: 0,
@@ -687,50 +1058,131 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         listening: false
       }));
 
-      drawGlobalAxis(featureLayer);
+      drawGlobalAxis(blockLayer);
 
       REGION_DATA.samples.forEach((sample, index) => {
-        drawSample(featureLayer, interactionLayer, highlightLayer, sample, index);
+        drawSample(
+          blockLayer,
+          blockHighlightLayer,
+          snpLayer,
+          snpHighlightLayer,
+          interactionLayer,
+          sample,
+          index
+        );
       });
 
+      drawScrollbar(interactionLayer);
+      reapplyHighlightIfVisible();
       stage.draw();
     }
 
-    function redrawStagePreserveScroll() {
-      const viewerElement = document.getElementById("viewer");
-      const oldScrollableWidth = Math.max(1, viewerElement.scrollWidth - viewerElement.clientWidth);
-      const oldScrollRatio = oldScrollableWidth > 0
-        ? viewerElement.scrollLeft / oldScrollableWidth
-        : 0;
+    function startViewportDrag(pointerX) {
+      if (getMaxScrollX() <= 0) {
+        return;
+      }
 
-      redrawStage();
-
-      const newScrollableWidth = Math.max(1, viewerElement.scrollWidth - viewerElement.clientWidth);
-      viewerElement.scrollLeft = oldScrollRatio * newScrollableWidth;
+      state.isDraggingViewport = true;
+      state.suppressHover = true;
+      state.dragStartPointerX = pointerX;
+      state.dragStartScrollX = state.scrollX;
+      document.body.style.cursor = "grabbing";
     }
+
+    function updateViewportDrag(pointerX) {
+      const deltaX = pointerX - state.dragStartPointerX;
+      const worldDelta = deltaX * (getContentWidth() / getDrawableTrackWidth());
+      state.scrollX = clampScrollX(state.dragStartScrollX - worldDelta);
+      redrawStage();
+    }
+
+    function updateScrollbarDrag(pointerX) {
+      setScrollFromThumbX(pointerX - state.scrollbarDragOffsetX);
+      redrawStage();
+    }
+
+    function stopDrag() {
+      const wasDragging = state.isDraggingViewport || state.isDraggingScrollbar;
+      state.isDraggingViewport = false;
+      state.isDraggingScrollbar = false;
+      state.scrollbarDragOffsetX = 0;
+
+      if (wasDragging) {
+        state.suppressHover = false;
+        document.body.style.cursor = "default";
+      }
+    }
+
+    stage.on("pointerdown", (event) => {
+      if (event.target !== stage) {
+        return;
+      }
+
+      const pointer = stage.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+
+      const scrollbarY = getScrollbarY();
+      if (pointer.y >= scrollbarY) {
+        return;
+      }
+
+      startViewportDrag(pointer.x);
+    });
+
+    stage.on("pointermove", () => {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+
+      if (state.isDraggingViewport) {
+        updateViewportDrag(pointer.x);
+        return;
+      }
+
+      if (state.isDraggingScrollbar) {
+        updateScrollbarDrag(pointer.x);
+        return;
+      }
+
+      const scrollbarY = getScrollbarY();
+      if (pointer.y < scrollbarY && getMaxScrollX() > 0) {
+        document.body.style.cursor = "grab";
+      } else {
+        document.body.style.cursor = "default";
+      }
+    });
+
+    stage.on("pointerup", stopDrag);
+    stage.on("pointerleave", stopDrag);
 
     state.featureGroups = buildFeatureGroups(REGION_DATA);
     renderSidebarDefault();
     state.zoomX = getInitialZoomX();
+    state.scrollX = 0;
     redrawStage();
 
     window.addEventListener("resize", () => {
-      redrawStagePreserveScroll();
+      normalizeScrollX();
+      redrawStage();
     });
 
     document.getElementById("zoom-in").addEventListener("click", () => {
-      state.zoomX = Math.min(getMaxZoomX(), state.zoomX * getZoomFactor());
-      redrawStagePreserveScroll();
+      zoomAroundViewportCenter(state.zoomX * getZoomFactor());
+      redrawStage();
     });
 
     document.getElementById("zoom-out").addEventListener("click", () => {
-      state.zoomX = Math.max(getInitialZoomX(), state.zoomX / getZoomFactor());
-      redrawStagePreserveScroll();
+      zoomAroundViewportCenter(state.zoomX / getZoomFactor());
+      redrawStage();
     });
 
     document.getElementById("zoom-reset").addEventListener("click", () => {
       state.zoomX = getInitialZoomX();
-      redrawStagePreserveScroll();
+      state.scrollX = 0;
+      redrawStage();
     });
   </script>
 </body>
