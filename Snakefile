@@ -1,11 +1,13 @@
 configfile: "config/config.yaml"
 
 include: "rules/common.smk"
+include: "rules/mash_dists.smk"
 include: "rules/blocks.smk"
 include: "rules/snps.smk"
 include: "rules/coordinate_mapping.smk"
 include: "rules/dotplots.smk"
 include: "rules/summary_stats.smk"
+include: "rules/block_stats.smk"
 include: "rules/region_overview.smk"
 
 rule all:

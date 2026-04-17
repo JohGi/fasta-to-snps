@@ -158,7 +158,11 @@ def get_chunk_ids(_wildcards=None) -> list[str]:
     chunk_dir = get_chunk_list_dir()
     return sorted(path.stem for path in chunk_dir.glob("*.list"))
 
+def get_masked_chunk_done_outputs(_wildcards=None) -> list[Path]:
+    """Return all masking chunk completion markers after checkpoint completion."""
+    return [MASKED_CHUNK_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
 
+    
 def get_align_chunk_outputs(_wildcards=None) -> list[Path]:
     """Return all alignment chunk completion markers after checkpoint completion."""
     return [ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
@@ -226,6 +230,8 @@ DOTPLOT_SVG_DIR = DOTPLOT_DIR / "svgs"
 DOTPLOT_COMBINED_DIR = DOTPLOT_DIR / "combined"
 SUMMARY_STATS_DIR = OUTDIR / "11_summary_stats"
 REGION_TRACK_DIR = OUTDIR / "12_region_tracks"
+MASH_DISTANCES_DIR = OUTDIR / "13_mash_distances"
+BLOCK_STATS_DIR = OUTDIR / "14_block_stats"
 LOG_DIR = OUTDIR / "logs"
 BENCHMARK_DIR = OUTDIR / "benchmarks"
 
@@ -272,7 +278,9 @@ DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
 SUMMARY_STATS_JSON = SUMMARY_STATS_DIR / "summary_stats.json"
 SUMMARY_STATS_TXT = SUMMARY_STATS_DIR / "summary_stats.txt"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
-
+MASHTREE_MATRIX = MASH_DISTANCES_DIR / "mashtree.matrix.tsv"
+MASHTREE_TREE = MASH_DISTANCES_DIR / "mashtree.dnd"
+MASKED_BLOCK_N_STATS_TSV = BLOCK_STATS_DIR / "masked_block_n_stats.tsv"
 
 NB_SAMPLES = len(SAMPLES)
 te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")

@@ -31,6 +31,10 @@ numpy = ">=1.24,<2"
 perl = "*"
 minimap2 = "*"
 
+[feature.mashtree.dependencies]
+mashtree = ">=1.4.6,<2"
+
 [environments]
 default = { features = ["workflow"], no-default-feature = true }
 dotplot = { features = ["dotplot"], no-default-feature = true }
+mashtree = { features = ["mashtree"], no-default-feature = true }

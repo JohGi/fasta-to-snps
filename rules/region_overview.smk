@@ -4,7 +4,9 @@ rule plot_region_overview:
         block_coords_tsv=BLOCK_COORDINATES_TSV,
         snp_long=SNP_POS_LONG_TSV,
         fastas=CLEAN_FASTAS,
-        stats_json=SUMMARY_STATS_JSON
+        stats_json=SUMMARY_STATS_JSON,
+        mash_dists_tsv=MASHTREE_MATRIX,
+        n_stats_tsv=MASKED_BLOCK_N_STATS_TSV
     output:
         REGION_TRACK_HTML
     benchmark:
