@@ -3,23 +3,27 @@
 
 from __future__ import annotations
 
-from .models import BlockFeature, SampleData, SampleRecord, SnpFeature
-
 from .constants import (
     BLOCK_FILL,
+    BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
+    BLOCK_MIN_WIDTH_PX,
     BOTTOM_MARGIN,
-    FEATURE_HEIGHT,
     BP_TO_KB_THRESHOLD_BP,
+    END_PADDING_PX,
+    FEATURE_HEIGHT,
+    HOVER_HIGHLIGHT_COLOR,
     KB_TO_MB_THRESHOLD_BP,
     LEFT_MARGIN,
     MAX_ZOOM_CAP,
     PANEL_GAP,
     PANEL_HEIGHT,
+    PIN_HIGHLIGHT_COLOR,
     RIGHT_MARGIN,
-    END_PADDING_PX,
     SNP_COLOR,
     SNP_HEIGHT,
+    SNP_HIGHLIGHT_MIN_WIDTH_PX,
     SNP_LINE_WIDTH,
+    SNP_MIN_WIDTH_PX,
     TARGET_TICK_SPACING_PX,
     TARGET_VISIBLE_BP,
     TOP_MARGIN,
@@ -28,13 +32,9 @@ from .constants import (
     VIEWER_MIN_WIDTH,
     VIEWER_TOP_UI_HEIGHT,
     ZOOM_STEPS,
-    BLOCK_MIN_WIDTH_PX,
-    BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
-    SNP_MIN_WIDTH_PX,
-    SNP_HIGHLIGHT_MIN_WIDTH_PX,
-    PIN_HIGHLIGHT_COLOR,
-    HOVER_HIGHLIGHT_COLOR,
 )
+from .models import BlockFeature, SampleData, SampleRecord, SnpFeature
+
 
 def build_sample_data(
     sample_records: list[SampleRecord],
@@ -56,7 +56,11 @@ def build_sample_data(
                 zone_length=fasta_lengths[sample],
                 blocks=sorted(
                     blocks_by_sample.get(sample, []),
-                    key=lambda block: (block.start, block.end, block.block_id),
+                    key=lambda block: (
+                        block.block_start_in_zone,
+                        block.block_end_in_zone,
+                        block.block_id,
+                    ),
                 ),
                 snps=sorted(
                     snps_by_sample.get(sample, []),
@@ -83,8 +87,10 @@ def build_region_payload(sample_data: list[SampleData]) -> dict[str, object]:
                     {
                         "feature_id": block.feature_id,
                         "block_id": block.block_id,
-                        "start": block.start,
-                        "end": block.end,
+                        "block_start_in_zone": block.block_start_in_zone,
+                        "block_end_in_zone": block.block_end_in_zone,
+                        "block_start_in_source_seq": block.block_start_in_source_seq,
+                        "block_end_in_source_seq": block.block_end_in_source_seq,
                     }
                     for block in sample.blocks
                 ],

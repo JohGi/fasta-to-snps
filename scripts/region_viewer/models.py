@@ -22,8 +22,10 @@ class BlockFeature:
 
     sample: str
     block_id: str
-    start: int
-    end: int
+    block_start_in_zone: int
+    block_end_in_zone: int
+    block_start_in_source_seq: int
+    block_end_in_source_seq: int
 
     @property
     def feature_id(self) -> str:

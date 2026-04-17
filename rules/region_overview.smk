@@ -1,7 +1,7 @@
 rule plot_region_overview:
     input:
         samples_tsv=SAMPLES_TSV,
-        blocks_gff=FILTERED_GFF,
+        block_coords_tsv=BLOCK_COORDINATES_TSV,
         snp_long=SNP_POS_LONG_TSV,
         fastas=CLEAN_FASTAS
     output:
@@ -16,7 +16,7 @@ rule plot_region_overview:
         mkdir -p "{REGION_TRACK_DIR}" "$(dirname "{log.stdout}")"
         python3 "{SCRIPTS_DIR}/plot_region_overview.py" \
             --samples-tsv "{input.samples_tsv}" \
-            --blocks-gff "{input.blocks_gff}" \
+            --block-coords-tsv "{input.block_coords_tsv}" \
             --snp-long "{input.snp_long}" \
             --fasta-dir "{CLEAN_FASTA_DIR}" \
             --output "{output}" \

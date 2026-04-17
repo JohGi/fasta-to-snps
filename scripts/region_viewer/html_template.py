@@ -281,9 +281,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             info: {
               sample: sample.sample,
               block_id: block.block_id,
-              start: block.start,
-              end: block.end,
-              length: block.end - block.start + 1
+              block_start_in_zone: block.block_start_in_zone,
+              block_end_in_zone: block.block_end_in_zone,
+              block_start_in_source_seq: block.block_start_in_source_seq,
+              block_end_in_source_seq: block.block_end_in_source_seq,
+              length: block.block_end_in_zone - block.block_start_in_zone + 1
             }
           };
 
@@ -324,6 +326,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;");
+    }
+
+    function formatSidebarKey(key) {
+      const labels = {
+        nt: "nt",
+        length: "length",
+        pos_in_zone: "pos in zone",
+        pos_in_source_seq: "pos in source seq",
+        block_start_in_zone: "block start in zone",
+        block_end_in_zone: "block end in zone",
+        block_start_in_source_seq: "block start in source seq",
+        block_end_in_source_seq: "block end in source seq"
+      };
+
+      return labels[key] || key.replaceAll("_", " ");
     }
 
     function clearHighlightMap() {
@@ -429,7 +446,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         ? `${firstInfo.block_id}:${firstInfo.aln_pos}`
         : `${firstInfo.block_id}`;
 
-      let header = `
+      const header = `
         <div class="sidebar-header">
           <div>
             <h2>${kind}</h2>
@@ -455,7 +472,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (hiddenKeys.has(key)) {
               continue;
             }
-            html += `<div class="key">${escapeHtml(key)}</div><div>${escapeHtml(String(value))}</div>`;
+            html += `<div class="key">${escapeHtml(formatSidebarKey(key))}</div><div>${escapeHtml(String(value))}</div>`;
           }
 
           html += "</div>";
@@ -847,8 +864,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const visibleStart = getVisibleStartBp();
       const visibleEnd = getVisibleEndBp();
 
-      const clippedStart = Math.max(feature.start, visibleStart);
-      const clippedEnd = Math.min(feature.end, visibleEnd);
+      const clippedStart = Math.max(feature.block_start_in_zone, visibleStart);
+      const clippedEnd = Math.min(feature.block_end_in_zone, visibleEnd);
 
       const x0 = worldXToScreenX(clippedStart);
       const x1 = worldXToScreenX(clippedEnd);
@@ -880,8 +897,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const visibleStart = getVisibleStartBp();
       const visibleEnd = getVisibleEndBp();
 
-      const clippedStart = Math.max(feature.start, visibleStart);
-      const clippedEnd = Math.min(feature.end, visibleEnd);
+      const clippedStart = Math.max(feature.block_start_in_zone, visibleStart);
+      const clippedEnd = Math.min(feature.block_end_in_zone, visibleEnd);
 
       const x0 = worldXToScreenX(clippedStart);
       const x1 = worldXToScreenX(clippedEnd);
@@ -903,8 +920,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const visibleStart = getVisibleStartBp();
       const visibleEnd = getVisibleEndBp();
 
-      const clippedStart = Math.max(feature.start, visibleStart);
-      const clippedEnd = Math.min(feature.end, visibleEnd);
+      const clippedStart = Math.max(feature.block_start_in_zone, visibleStart);
+      const clippedEnd = Math.min(feature.block_end_in_zone, visibleEnd);
 
       const x0 = worldXToScreenX(clippedStart);
       const x1 = worldXToScreenX(clippedEnd);
@@ -977,7 +994,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       drawSampleOutline(zoneOutlineLayer, sample, panelTop);
 
       for (const block of sample.blocks) {
-        if (!intersectsRange(block.start, block.end, visibleStart, visibleEnd)) {
+        if (!intersectsRange(
+          block.block_start_in_zone,
+          block.block_end_in_zone,
+          visibleStart,
+          visibleEnd
+        )) {
           continue;
         }
 

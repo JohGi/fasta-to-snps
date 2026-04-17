@@ -91,35 +91,35 @@ def read_fasta_lengths(fasta_dir: Path) -> dict[str, int]:
     return lengths
 
 
-def parse_block_id(attributes: str) -> str:
-    """Extract the block ID from a GFF attribute column."""
-    for item in attributes.split(";"):
-        if item.startswith("ID="):
-            return item.removeprefix("ID=").strip()
-    raise ValueError(f"Could not find ID=... in GFF attributes: {attributes!r}")
-
-
 def read_blocks(path: Path) -> dict[str, list[BlockFeature]]:
-    """Read conserved blocks from the filtered GFF."""
+    """Read conserved blocks from the enriched block coordinates TSV."""
+    dataframe = pl.read_csv(path, separator="\t")
+
+    required_columns = {
+        "block_id",
+        "sample",
+        "block_start_in_zone",
+        "block_end_in_zone",
+        "block_start_in_source_seq",
+        "block_end_in_source_seq",
+    }
+    missing_columns = required_columns - set(dataframe.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Missing required columns in block coordinates TSV {path}: {sorted(missing_columns)}"
+        )
+
     blocks_by_sample: dict[str, list[BlockFeature]] = {}
-
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-
-            fields = stripped.split("\t")
-            if len(fields) != 9:
-                raise ValueError(f"Invalid GFF line with {len(fields)} columns: {line.rstrip()}")
-
-            sample = fields[0]
-            start = int(fields[3])
-            end = int(fields[4])
-            block_id = parse_block_id(fields[8])
-            blocks_by_sample.setdefault(sample, []).append(
-                BlockFeature(sample=sample, block_id=block_id, start=start, end=end)
-            )
+    for row in dataframe.iter_rows(named=True):
+        block = BlockFeature(
+            sample=str(row["sample"]),
+            block_id=str(row["block_id"]),
+            block_start_in_zone=int(row["block_start_in_zone"]),
+            block_end_in_zone=int(row["block_end_in_zone"]),
+            block_start_in_source_seq=int(row["block_start_in_source_seq"]),
+            block_end_in_source_seq=int(row["block_end_in_source_seq"]),
+        )
+        blocks_by_sample.setdefault(block.sample, []).append(block)
 
     return blocks_by_sample
 

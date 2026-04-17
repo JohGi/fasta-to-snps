@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
         description="Generate an interactive Konva-based region overview HTML."
     )
     parser.add_argument("--samples-tsv", type=Path, required=True)
-    parser.add_argument("--blocks-gff", type=Path, required=True)
+    parser.add_argument("--block-coords-tsv", type=Path, required=True)
     parser.add_argument("--snp-long", type=Path, required=True)
     parser.add_argument("--fasta-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -48,7 +48,7 @@ def main() -> None:
 
     builder = RegionOverviewBuilder(
         samples_tsv_path=args.samples_tsv,
-        blocks_gff_path=args.blocks_gff,
+        block_coords_tsv_path=args.block_coords_tsv,
         snp_long_path=args.snp_long,
         fasta_dir=args.fasta_dir,
         output_path=args.output,
