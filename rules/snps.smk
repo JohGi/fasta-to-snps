@@ -51,9 +51,10 @@ rule align_block_chunk:
             --fasta-dir "{params.fasta_dir}" \
             --outdir "{params.outdir}" \
             --threads {threads} \
+            --fasta-suffix .fasta.masked \
             --mafft-extra-options "{params.extra_options}" \
             1> "{log.stdout}" \
-            2> "{log.stderr}"
+            2> "{log.stderr}" && \
         touch "{output}"
         """
 

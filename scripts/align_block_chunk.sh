@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Author: Johanna Girodolle
+
 set -euo pipefail
 
 usage() {
@@ -11,6 +13,7 @@ Usage:
     --fasta-dir results/05_masked_block_fastas \
     --outdir results/06_alignments \
     --threads 1 \
+    --fasta-suffix .fasta.masked \
     --mafft-extra-options "--auto"
 EOF
 }
@@ -19,6 +22,7 @@ chunk_list=""
 fasta_dir=""
 outdir=""
 threads=""
+fasta_suffix=""
 mafft_extra_options=""
 
 while [[ $# -gt 0 ]]; do
@@ -39,6 +43,10 @@ while [[ $# -gt 0 ]]; do
             threads="${2:-}"
             shift 2
             ;;
+        --fasta-suffix)
+            fasta_suffix="${2:-}"
+            shift 2
+            ;;
         --mafft-extra-options)
             mafft_extra_options="${2:-}"
             shift 2
@@ -55,7 +63,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$chunk_list" || -z "$fasta_dir" || -z "$outdir" || -z "$threads" ]]; then
+if [[ -z "$chunk_list" || -z "$fasta_dir" || -z "$outdir" || -z "$threads" || -z "$fasta_suffix" ]]; then
     echo "Error: missing required arguments." >&2
     usage >&2
     exit 1
@@ -76,19 +84,15 @@ mkdir -p "$outdir"
 while read -r block_id; do
     [[ -z "$block_id" ]] && continue
 
-    fasta_path=""
-    if [[ -s "${fasta_dir}/${block_id}.fasta.masked" ]]; then
-        fasta_path="${fasta_dir}/${block_id}.fasta.masked"
-    elif [[ -s "${fasta_dir}/${block_id}.fasta" ]]; then
-        fasta_path="${fasta_dir}/${block_id}.fasta"
-    else
-        echo "Error: no FASTA found for block '${block_id}' in '${fasta_dir}'." >&2
+    fasta_path="${fasta_dir}/${block_id}${fasta_suffix}"
+
+    if [[ ! -s "$fasta_path" ]]; then
+        echo "Error: FASTA '$fasta_path' not found or empty." >&2
         exit 1
     fi
 
     output_path="${outdir}/${block_id}.aln.fasta"
 
-    echo "[INFO] Aligning block '${block_id}'." >&2
-
+    echo "[INFO] Aligning block '${block_id}' from '${fasta_path}'." >&2
     mafft --thread "$threads" $mafft_extra_options "$fasta_path" > "$output_path"
 done < "$chunk_list"
