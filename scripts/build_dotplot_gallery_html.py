@@ -28,13 +28,19 @@ class SampleRecord:
 
 @define(frozen=True)
 class GalleryCell:
-    """Store one gallery cell."""
+    """Store one gallery cell in the matrix."""
 
     cell_type: str
-    row_sample: str = ""
-    col_sample: str = ""
     label: str = ""
     svg_rel_path: str = ""
+
+
+@define(frozen=True)
+class MatrixRow:
+    """Store one matrix row with its vertical label."""
+
+    row_label: str
+    cells: list[GalleryCell]
 
 
 @define(frozen=True)
@@ -70,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pivot",
         default="",
-        help="Optional pivot sample name. If provided, render a single-row gallery.",
+        help="Optional pivot sample name. If provided, render a pivot layout.",
     )
     return parser.parse_args()
 
@@ -84,7 +90,7 @@ def configure_logging() -> None:
 
 
 def build_config_from_args(args: argparse.Namespace) -> GalleryConfig:
-    """Build a gallery configuration from parsed arguments."""
+    """Build the gallery configuration."""
     return GalleryConfig(
         samples_path=Path(args.samples),
         svg_dir=Path(args.svg_dir),
@@ -140,101 +146,90 @@ def build_svg_path(pair_id: str, svg_dir: Path) -> Path:
 
 
 def build_relative_svg_path(output_path: Path, svg_path: Path) -> str:
-    """Build a relative SVG path from the HTML output location."""
+    """Build a relative SVG path from the output HTML file."""
     return os.path.relpath(svg_path, start=output_path.parent)
 
 
-def create_missing_cell(row_sample: str, col_sample: str, label: str) -> GalleryCell:
-    """Create a missing gallery cell."""
-    return GalleryCell(
-        cell_type="missing",
-        row_sample=row_sample,
-        col_sample=col_sample,
-        label=label,
-    )
+def create_empty_cell() -> GalleryCell:
+    """Create an empty matrix cell."""
+    return GalleryCell(cell_type="empty")
 
 
-def create_plot_cell(
-    row_sample: str,
-    col_sample: str,
-    label: str,
-    svg_rel_path: str,
-) -> GalleryCell:
-    """Create a plot gallery cell."""
-    return GalleryCell(
-        cell_type="plot",
-        row_sample=row_sample,
-        col_sample=col_sample,
-        label=label,
-        svg_rel_path=svg_rel_path,
-    )
+def create_plot_cell(svg_rel_path: str) -> GalleryCell:
+    """Create a plot cell."""
+    return GalleryCell(cell_type="plot", svg_rel_path=svg_rel_path)
+
+
+def create_missing_cell(label: str) -> GalleryCell:
+    """Create a missing plot cell."""
+    return GalleryCell(cell_type="missing", label=label)
+
+
+def build_full_matrix_column_headers(sample_names: list[str]) -> list[str]:
+    """Build visible headers for the compact triangular layout."""
+    return sample_names[1:]
 
 
 def build_full_matrix_rows(
     sample_names: list[str],
     svg_dir: Path,
     output_path: Path,
-) -> list[list[GalleryCell]]:
-    """Build rows for a triangular full matrix gallery."""
-    rows: list[list[GalleryCell]] = []
+) -> list[MatrixRow]:
+    """Build compact upper-triangular rows without diagonal cells.
 
-    for row_index, row_sample in enumerate(sample_names):
+    For samples A, B, C, D, E:
+
+        visible headers: B C D E
+
+        row A: A vs B, A vs C, A vs D, A vs E
+        row B: empty, B vs C, B vs D, B vs E
+        row C: empty, empty, C vs D, C vs E
+        row D: empty, empty, empty, D vs E
+    """
+    if len(sample_names) < 2:
+        raise ValueError("At least two samples are required to build a dotplot matrix.")
+
+    rows: list[MatrixRow] = []
+    row_samples = sample_names[:-1]
+    col_samples = sample_names[1:]
+    sample_to_index = {sample: index for index, sample in enumerate(sample_names)}
+
+    for row_sample in row_samples:
+        row_index = sample_to_index[row_sample]
         row_cells: list[GalleryCell] = []
-        row_cells.append(
-            GalleryCell(
-                cell_type="row_header",
-                row_sample=row_sample,
-                label=row_sample,
-            )
-        )
 
-        for col_index, col_sample in enumerate(sample_names):
-            if col_index < row_index:
-                row_cells.append(
-                    GalleryCell(
-                        cell_type="empty",
-                        row_sample=row_sample,
-                        col_sample=col_sample,
-                    )
-                )
-                continue
+        for col_sample in col_samples:
+            col_index = sample_to_index[col_sample]
 
-            if col_index == row_index:
-                row_cells.append(
-                    GalleryCell(
-                        cell_type="diagonal",
-                        row_sample=row_sample,
-                        col_sample=col_sample,
-                        label=row_sample,
-                    )
-                )
+            if col_index <= row_index:
+                row_cells.append(create_empty_cell())
                 continue
 
             pair_id = build_pair_id(row_sample, col_sample)
             svg_path = build_svg_path(pair_id, svg_dir)
-            label = f"{row_sample} vs {col_sample}"
 
             if svg_path.exists():
                 row_cells.append(
                     create_plot_cell(
-                        row_sample=row_sample,
-                        col_sample=col_sample,
-                        label=label,
-                        svg_rel_path=build_relative_svg_path(output_path, svg_path),
+                        svg_rel_path=build_relative_svg_path(output_path, svg_path)
                     )
                 )
             else:
                 row_cells.append(
-                    create_missing_cell(
-                        row_sample=row_sample,
-                        col_sample=col_sample,
-                        label=label,
-                    )
+                    create_missing_cell(label=f"Missing SVG for {pair_id}")
                 )
 
-        rows.append(row_cells)
+        rows.append(MatrixRow(row_label=row_sample, cells=row_cells))
 
     return rows
+
+
+def build_pivot_column_headers(
+    sample_names: list[str],
+    pivot: str,
+) -> list[str]:
+    """Build visible headers for the pivot layout."""
+    return [sample_name for sample_name in sample_names if sample_name != pivot]
 
 
 def build_pivot_rows(
@@ -242,15 +237,9 @@ def build_pivot_rows(
     pivot: str,
     svg_dir: Path,
     output_path: Path,
-) -> list[list[GalleryCell]]:
-    """Build rows for a pivot-based one-line gallery."""
-    row_cells: list[GalleryCell] = [
-        GalleryCell(
-            cell_type="row_header",
-            row_sample=pivot,
-            label=pivot,
-        )
-    ]
+) -> list[MatrixRow]:
+    """Build pivot rows with one vertical row label and one row of plots."""
+    row_cells: list[GalleryCell] = []
 
     for sample_name in sample_names:
         if sample_name == pivot:
@@ -258,122 +247,132 @@ def build_pivot_rows(
 
         pair_id = build_pair_id(pivot, sample_name)
         svg_path = build_svg_path(pair_id, svg_dir)
-        label = f"{pivot} vs {sample_name}"
 
         if svg_path.exists():
             row_cells.append(
                 create_plot_cell(
-                    row_sample=pivot,
-                    col_sample=sample_name,
-                    label=label,
-                    svg_rel_path=build_relative_svg_path(output_path, svg_path),
+                    svg_rel_path=build_relative_svg_path(output_path, svg_path)
                 )
             )
         else:
             row_cells.append(
-                create_missing_cell(
-                    row_sample=pivot,
-                    col_sample=sample_name,
-                    label=label,
-                )
+                create_missing_cell(label=f"Missing SVG for {pair_id}")
             )
 
-    return [row_cells]
-
-
-def build_column_headers(sample_names: list[str], pivot: str) -> list[str]:
-    """Build column header labels."""
-    if pivot:
-        return [""] + [sample for sample in sample_names if sample != pivot]
-    return [""] + sample_names
+    return [MatrixRow(row_label=pivot, cells=row_cells)]
 
 
 def render_column_headers(column_headers: list[str]) -> str:
-    """Render HTML for the column header row."""
+    """Render matrix column headers."""
     parts = ['<div class="corner-cell"></div>']
-    for header in column_headers[1:]:
-        parts.append(
-            f'<div class="col-header">{html.escape(header)}</div>'
-        )
+
+    for header in column_headers:
+        parts.append(f'<div class="col-header">{html.escape(header)}</div>')
+
     return "\n".join(parts)
 
 
-def render_gallery_cell(cell: GalleryCell) -> str:
-    """Render one gallery cell as HTML."""
-    if cell.cell_type == "row_header":
-        return f'<div class="row-header">{html.escape(cell.label)}</div>'
+def render_row_label(row_label: str) -> str:
+    """Render one vertical row label."""
+    return (
+        '<div class="row-label-cell">'
+        f'<span>{html.escape(row_label)}</span>'
+        "</div>"
+    )
 
+
+def render_gallery_cell(cell: GalleryCell) -> str:
+    """Render one matrix cell."""
     if cell.cell_type == "empty":
         return '<div class="gallery-cell empty-cell"></div>'
-
-    if cell.cell_type == "diagonal":
-        return (
-            '<div class="gallery-cell diagonal-cell">'
-            f'<span>{html.escape(cell.label)}</span>'
-            '</div>'
-        )
 
     if cell.cell_type == "missing":
         return (
             '<div class="gallery-cell missing-cell">'
-            f'<div class="cell-label">{html.escape(cell.label)}</div>'
-            '<div class="missing-note">Missing SVG</div>'
-            '</div>'
+            f'<div class="missing-note">{html.escape(cell.label)}</div>'
+            "</div>"
         )
 
     return (
         '<div class="gallery-cell plot-cell">'
-        f'<div class="cell-label">{html.escape(cell.label)}</div>'
-        f'<img src="{html.escape(cell.svg_rel_path)}" '
-        f'alt="{html.escape(cell.label)}" loading="lazy" />'
-        '</div>'
+        '<div class="plot-frame">'
+        f'<img src="{html.escape(cell.svg_rel_path)}" alt="" loading="lazy" />'
+        "</div>"
+        "</div>"
     )
 
 
-def render_rows(rows: list[list[GalleryCell]]) -> str:
-    """Render all gallery rows as HTML."""
+def render_rows(rows: list[MatrixRow]) -> str:
+    """Render all matrix rows."""
     rendered_cells: list[str] = []
 
     for row in rows:
-        for cell in row:
+        rendered_cells.append(render_row_label(row.row_label))
+        for cell in row.cells:
             rendered_cells.append(render_gallery_cell(cell))
 
     return "\n".join(rendered_cells)
 
 
-def infer_grid_column_count(column_headers: list[str]) -> int:
-    """Infer the CSS grid column count."""
-    return len(column_headers)
+def infer_full_matrix_grid_column_count(sample_names: list[str]) -> int:
+    """Infer the grid column count for the compact triangular layout."""
+    return len(sample_names)
+
+
+def infer_pivot_grid_column_count(sample_names: list[str]) -> int:
+    """Infer the grid column count for the pivot layout."""
+    return len(sample_names)
+
+
+def build_summary_label(sample_names: list[str], pivot: str) -> str:
+    """Build the toolbar summary label."""
+    if pivot:
+        compared_samples = len(sample_names) - 1
+        return (
+            f"Mode: pivot | Pivot: {pivot} | "
+            f"Compared samples: {compared_samples}"
+        )
+    return f"Mode: full matrix | Samples: {len(sample_names)}"
 
 
 def build_html_document(
     sample_names: list[str],
     pivot: str,
     column_headers: list[str],
-    rows: list[list[GalleryCell]],
+    rows: list[MatrixRow],
 ) -> str:
     """Build the full HTML document."""
-    mode_label = "pivot" if pivot else "full matrix"
-    grid_columns = infer_grid_column_count(column_headers)
-    title = "Combined dotplot gallery"
+    if pivot:
+        grid_columns = infer_pivot_grid_column_count(sample_names)
+    else:
+        grid_columns = infer_full_matrix_grid_column_count(sample_names)
+
+    header_html = render_column_headers(column_headers)
+    summary_label = build_summary_label(sample_names, pivot)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{html.escape(title)}</title>
+  <title>Combined dotplot gallery</title>
   <style>
     :root {{
-      --bg: #f6f8fb;
+      --bg: #f3f4f6;
       --panel: #ffffff;
-      --border: #d9dee8;
-      --text: #1f2937;
+      --header-bg: #f3f4f6;
+      --border: #d1d5db;
+      --text: #111827;
       --muted: #6b7280;
-      --empty: #eef2f7;
-      --missing: #fff3cd;
-      --diagonal: #eef6ff;
-      --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      --shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+      --cell-radius: 16px;
+      --plot-min-height: 320px;
+      --plot-col-width: 260px;
+      --row-label-width: 72px;
+      --grid-gap: 14px;
+      --col-header-font-size: 28px;
+      --row-label-font-size: 30px;
+      --missing-font-size: 18px;
     }}
 
     * {{
@@ -388,7 +387,7 @@ def build_html_document(
     }}
 
     .page {{
-      padding: 20px;
+      padding: 12px;
     }}
 
     .toolbar {{
@@ -396,10 +395,10 @@ def build_html_document(
       top: 0;
       z-index: 20;
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      padding: 12px 0 16px 0;
+      padding: 4px 0 14px 0;
       background: var(--bg);
     }}
 
@@ -407,108 +406,149 @@ def build_html_document(
       border: 1px solid var(--border);
       background: var(--panel);
       color: var(--text);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 8px 12px;
       cursor: pointer;
       box-shadow: var(--shadow);
+      font-size: 14px;
     }}
 
     .summary {{
       color: var(--muted);
       font-size: 14px;
-      margin-left: 8px;
+      margin-left: 4px;
     }}
 
     .viewport {{
       overflow: auto;
       border: 1px solid var(--border);
-      border-radius: 14px;
-      background: var(--panel);
+      border-radius: 18px;
+      background: #f7f7f8;
       box-shadow: var(--shadow);
       padding: 16px;
     }}
 
     .zoom-layer {{
       transform-origin: top left;
-      width: fit-content;
+      width: max-content;
     }}
 
     .gallery-grid {{
       display: grid;
-      grid-template-columns: 140px repeat({grid_columns - 1}, minmax(260px, 1fr));
-      gap: 12px;
-      align-items: start;
-      min-width: fit-content;
+      grid-template-columns: var(--row-label-width) repeat({grid_columns - 1}, minmax(var(--plot-col-width), 1fr));
+      gap: var(--grid-gap);
+      align-items: stretch;
+      min-width: max-content;
     }}
 
     .corner-cell,
     .col-header,
-    .row-header,
+    .row-label-cell,
     .gallery-cell {{
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--panel);
+      border-radius: var(--cell-radius);
     }}
 
     .corner-cell {{
+      min-height: 50px;
       background: transparent;
       border: none;
+      box-shadow: none;
     }}
 
-    .col-header,
-    .row-header {{
-      padding: 12px;
+    .col-header {{
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: var(--header-bg);
+      font-size: var(--col-header-font-size);
       font-weight: 700;
       text-align: center;
-      background: #f9fafb;
+      line-height: 1;
+    }}
+
+    .row-label-cell {{
+      min-height: var(--plot-min-height);
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 4px;
+      border: 1px solid var(--border);
+      background: var(--header-bg);
+      box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02);
+      align-self: stretch;
+    }}
+
+    .row-label-cell span {{
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: var(--row-label-font-size);
+      font-weight: 700;
+      line-height: 1;
+      text-align: center;
+      white-space: nowrap;
     }}
 
     .gallery-cell {{
-      padding: 10px;
-      min-height: 120px;
+      min-height: var(--plot-min-height);
+      height: 100%;
     }}
 
-    .plot-cell img {{
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: 8px;
-      background: white;
-    }}
-
-    .cell-label {{
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      text-align: center;
+    .plot-cell,
+    .missing-cell {{
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02);
     }}
 
     .empty-cell {{
+      border: none;
       background: transparent;
-      border-style: dashed;
-      min-height: 120px;
-    }}
-
-    .diagonal-cell {{
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--diagonal);
-      font-weight: 700;
-      color: var(--muted);
+      box-shadow: none;
     }}
 
     .missing-cell {{
-      background: var(--missing);
       display: flex;
-      flex-direction: column;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
+      min-height: var(--plot-min-height);
+      height: 100%;
+      padding: 20px;
+      text-align: center;
     }}
 
     .missing-note {{
-      font-size: 13px;
       color: var(--muted);
+      font-size: var(--missing-font-size);
+      line-height: 1.25;
+    }}
+
+    .plot-cell {{
+      padding: 10px;
+    }}
+
+    .plot-frame {{
+      width: 100%;
+      min-height: calc(var(--plot-min-height) - 20px);
+      overflow: hidden;
+      border-radius: 12px;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }}
+
+    .plot-frame img {{
+      display: block;
+      width: 108%;
+      height: auto;
+      transform: translate(-2.5%, -1.5%);
+      transform-origin: center center;
+      user-select: none;
+      pointer-events: none;
     }}
   </style>
 </head>
@@ -518,15 +558,13 @@ def build_html_document(
       <button type="button" id="zoom-out">-</button>
       <button type="button" id="zoom-in">+</button>
       <button type="button" id="zoom-reset">Reset</button>
-      <span class="summary">
-        Mode: {html.escape(mode_label)} | Samples: {len(sample_names)}
-      </span>
+      <span class="summary">{html.escape(summary_label)}</span>
     </div>
 
     <div class="viewport">
       <div class="zoom-layer" id="zoom-layer">
         <div class="gallery-grid">
-          {render_column_headers(column_headers)}
+          {header_html}
           {render_rows(rows)}
         </div>
       </div>
@@ -539,9 +577,10 @@ def build_html_document(
     const zoomOutButton = document.getElementById("zoom-out");
     const zoomResetButton = document.getElementById("zoom-reset");
 
-    let zoomLevel = 1.0;
+    const defaultZoomLevel = 0.3;
+    let zoomLevel = defaultZoomLevel;
     const zoomStep = 0.1;
-    const zoomMin = 0.2;
+    const zoomMin = 0.1;
     const zoomMax = 4.0;
 
     function applyZoom() {{
@@ -559,7 +598,7 @@ def build_html_document(
     }}
 
     function zoomReset() {{
-      zoomLevel = 1.0;
+      zoomLevel = defaultZoomLevel;
       applyZoom();
     }}
 
@@ -575,7 +614,7 @@ def build_html_document(
 
 
 def write_html(output_path: Path, content: str) -> None:
-    """Write the final HTML document."""
+    """Write the HTML document to disk."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(content, encoding="utf-8")
 
@@ -588,9 +627,9 @@ def main() -> None:
     sample_records = read_samples(config.samples_path)
     sample_names = extract_sample_names(sample_records)
     validate_pivot(sample_names, config.pivot)
-    column_headers = build_column_headers(sample_names, config.pivot)
 
     if config.pivot:
+        column_headers = build_pivot_column_headers(sample_names, config.pivot)
         rows = build_pivot_rows(
             sample_names=sample_names,
             pivot=config.pivot,
@@ -598,6 +637,7 @@ def main() -> None:
             output_path=config.output_path,
         )
     else:
+        column_headers = build_full_matrix_column_headers(sample_names)
         rows = build_full_matrix_rows(
             sample_names=sample_names,
             svg_dir=config.svg_dir,

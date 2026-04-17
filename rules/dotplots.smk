@@ -103,7 +103,7 @@ rule run_pairwise_blastn2dotplots:
 
 rule convert_pairwise_dotplot_pdf_to_svg:
     input:
-        DOTPLOT_IMAGE_DIR / "{pair_id}.simple.pdf"
+        DOTPLOT_PDF_DIR / "{pair_id}.simple.pdf"
     output:
         DOTPLOT_SVG_DIR / "{pair_id}.simple.svg"
     benchmark:
@@ -128,12 +128,11 @@ rule build_dotplot_gallery_html:
         stdout=LOG_DIR / "build_dotplot_gallery_html" / "dotplots_gallery.stdout",
         stderr=LOG_DIR / "build_dotplot_gallery_html" / "dotplots_gallery.stderr"
     params:
-        script=SCRIPTS_DIR / "build_dotplot_gallery_html.py",
         pivot=lambda wildcards: str(config.get("visualization", {}).get("dotplot_pivot", "")).strip()
     shell:
         r"""
         mkdir -p "{DOTPLOT_COMBINED_DIR}" "$(dirname "{log.stdout}")"
-        python3 "{params.script}" \
+        python3 "{SCRIPTS_DIR}/build_dotplot_gallery_html.py" \
             --samples "{SAMPLES_TSV}" \
             --svg-dir "{DOTPLOT_SVG_DIR}" \
             --output "{output}" \
