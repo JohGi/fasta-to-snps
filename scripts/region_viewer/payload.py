@@ -9,7 +9,6 @@ from .constants import (
     BLOCK_FILL,
     BOTTOM_MARGIN,
     FEATURE_HEIGHT,
-    HIGHLIGHT_COLOR,
     BP_TO_KB_THRESHOLD_BP,
     KB_TO_MB_THRESHOLD_BP,
     LEFT_MARGIN,
@@ -29,6 +28,12 @@ from .constants import (
     VIEWER_MIN_WIDTH,
     VIEWER_TOP_UI_HEIGHT,
     ZOOM_STEPS,
+    BLOCK_MIN_WIDTH_PX,
+    BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
+    SNP_MIN_WIDTH_PX,
+    SNP_HIGHLIGHT_MIN_WIDTH_PX,
+    PIN_HIGHLIGHT_COLOR,
+    HOVER_HIGHLIGHT_COLOR,
 )
 
 def build_sample_data(
@@ -119,7 +124,6 @@ def build_config_payload() -> dict[str, object]:
         "snpStrokeWidth": SNP_LINE_WIDTH,
         "blockFill": BLOCK_FILL,
         "snpColor": SNP_COLOR,
-        "highlightColor": HIGHLIGHT_COLOR,
         "viewerTopUiHeight": VIEWER_TOP_UI_HEIGHT,
         "targetVisibleBp": TARGET_VISIBLE_BP,
         "targetTickSpacingPx": TARGET_TICK_SPACING_PX,
@@ -127,4 +131,10 @@ def build_config_payload() -> dict[str, object]:
         "kbToMbThresholdBp": KB_TO_MB_THRESHOLD_BP,
         "maxZoomCap": MAX_ZOOM_CAP,
         "zoomSteps": ZOOM_STEPS,
+        "blockMinWidthPx": BLOCK_MIN_WIDTH_PX,
+        "blockHighlightMinWidthPx": BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
+        "snpMinWidthPx": SNP_MIN_WIDTH_PX,
+        "snpHighlightMinWidthPx": SNP_HIGHLIGHT_MIN_WIDTH_PX,
+        "pinHighlightColor": PIN_HIGHLIGHT_COLOR,
+        "hoverHighlightColor": HOVER_HIGHLIGHT_COLOR,
     }

@@ -252,8 +252,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       trackInset: 8
     };
 
-    const HOVER_HIGHLIGHT_COLOR = "#93c5fd";
-
     const state = {
       hoveredFeatureId: null,
       hoveredFeatureType: null,
@@ -345,7 +343,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function styleHighlightNode(entry, mode) {
       const node = entry.node;
       const featureType = entry.featureType;
-      const color = mode === "pin" ? CONFIG.highlightColor : HOVER_HIGHLIGHT_COLOR;
+      const color = mode === "pin" ? CONFIG.pinHighlightColor : CONFIG.hoverHighlightColor;
 
       if (featureType === "block") {
         node.fill(color);
@@ -845,7 +843,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return panelTop + CONFIG.trackY;
     }
 
-    function getBlockGeometry(feature, panelTop) {
+    function getBlockGeometry(feature, panelTop, minWidthPx) {
       const visibleStart = getVisibleStartBp();
       const visibleEnd = getVisibleEndBp();
 
@@ -859,13 +857,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return {
         x: x0,
         y: y0,
-        width: Math.max(1, x1 - x0),
+        width: Math.max(minWidthPx, x1 - x0),
         height: CONFIG.featureHeight
       };
     }
 
     function createBlockShape(feature, panelTop) {
-      const geometry = getBlockGeometry(feature, panelTop);
+      const geometry = getBlockGeometry(feature, panelTop, CONFIG.blockMinWidthPx);
 
       return new Konva.Rect({
         x: geometry.x,
@@ -879,14 +877,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function createBlockHighlight(feature, panelTop) {
-      const geometry = getBlockGeometry(feature, panelTop);
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      const clippedStart = Math.max(feature.start, visibleStart);
+      const clippedEnd = Math.min(feature.end, visibleEnd);
+
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
+      const y0 = panelTop + CONFIG.trackY;
 
       return new Konva.Rect({
-        x: geometry.x,
-        y: geometry.y,
-        width: geometry.width,
-        height: geometry.height,
-        fill: CONFIG.highlightColor,
+        x: x0,
+        y: y0,
+        width: Math.max(CONFIG.blockHighlightMinWidthPx, x1 - x0),
+        height: CONFIG.trackHeight,
+        fill: CONFIG.pinHighlightColor,
         strokeWidth: 0,
         visible: false,
         listening: false
@@ -921,7 +927,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return new Konva.Line({
         points: [x, y0, x, y1],
         stroke: CONFIG.snpColor,
-        strokeWidth: CONFIG.snpStrokeWidth,
+        strokeWidth: CONFIG.snpMinWidthPx,
         listening: false
       });
     }
@@ -946,8 +952,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       return new Konva.Line({
         points: [x, y0, x, y1],
-        stroke: CONFIG.highlightColor,
-        strokeWidth: 2,
+        stroke: CONFIG.pinHighlightColor,
+        strokeWidth: CONFIG.snpHighlightMinWidthPx,
         visible: false,
         listening: false
       });
@@ -958,6 +964,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       blockHighlightLayer,
       snpLayer,
       snpHighlightLayer,
+      zoneOutlineLayer,
       interactionLayer,
       sample,
       panelIndex
@@ -967,7 +974,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const visibleEnd = getVisibleEndBp();
 
       drawSampleLabel(blockLayer, panelTop, sample.sample);
-      drawSampleOutline(blockLayer, sample, panelTop);
+      drawSampleOutline(zoneOutlineLayer, sample, panelTop);
 
       for (const block of sample.blocks) {
         if (!intersectsRange(block.start, block.end, visibleStart, visibleEnd)) {
@@ -1006,7 +1013,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function getScrollbarMetrics() {
       const trackX = CONFIG.leftMargin + SCROLLBAR.trackInset;
-      const trackWidth = Math.max(1, getViewportTrackWidth() - 2 * SCROLLBAR.trackInset);
+      const trackWidth = Math.max(1, getDrawableTrackWidth() - 2 * SCROLLBAR.trackInset);
       const trackY = getScrollbarY();
       const contentWidth = getContentWidth();
       const viewportWidth = getDrawableTrackWidth();
@@ -1164,16 +1171,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     const backgroundLayer = new Konva.Layer();
     const blockLayer = new Konva.Layer();
-    const blockHighlightLayer = new Konva.Layer();
     const snpLayer = new Konva.Layer();
+    const blockHighlightLayer = new Konva.Layer();
     const snpHighlightLayer = new Konva.Layer();
+    const zoneOutlineLayer = new Konva.Layer();
     const interactionLayer = new Konva.Layer();
 
     stage.add(backgroundLayer);
     stage.add(blockLayer);
-    stage.add(blockHighlightLayer);
     stage.add(snpLayer);
+    stage.add(blockHighlightLayer);
     stage.add(snpHighlightLayer);
+    stage.add(zoneOutlineLayer);
     stage.add(interactionLayer);
 
     function redrawStage() {
@@ -1182,9 +1191,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       backgroundLayer.destroyChildren();
       blockLayer.destroyChildren();
-      blockHighlightLayer.destroyChildren();
       snpLayer.destroyChildren();
+      blockHighlightLayer.destroyChildren();
       snpHighlightLayer.destroyChildren();
+      zoneOutlineLayer.destroyChildren();
       interactionLayer.destroyChildren();
 
       clearHighlightMap();
@@ -1206,6 +1216,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           blockHighlightLayer,
           snpLayer,
           snpHighlightLayer,
+          zoneOutlineLayer,
           interactionLayer,
           sample,
           index
