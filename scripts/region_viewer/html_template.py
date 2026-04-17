@@ -139,9 +139,45 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       background: var(--panel-bg);
     }
 
-    .sidebar h2 {
-      margin: 0 0 12px 0;
+    .sidebar-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .sidebar-header h2 {
+      margin: 0;
       font-size: 18px;
+    }
+
+    .pin-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+      background: #e8f1fb;
+      color: #2f5f95;
+      border: 1px solid #c7dbf2;
+    }
+
+    .sidebar-close {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 6px 8px;
+      flex: 0 0 auto;
+    }
+
+    .sidebar-close:hover {
+      background: #f5f5f5;
     }
 
     .hint {
@@ -179,7 +215,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="app">
     <section id="info-panel" class="info-panel">
       <h2>Region viewer</h2>
-      <p class="hint">Hover a block or a SNP to highlight the corresponding feature across all samples.</p>
+      <p class="hint">Hover a block or a SNP to highlight the corresponding feature across all samples. Click a feature to pin it in the sidebar.</p>
     </section>
 
     <div class="content-row">
@@ -197,7 +233,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
 
       <aside id="sidebar" class="sidebar">
-        <h2>Hovered feature</h2>
+        <div class="sidebar-header">
+          <h2>Hovered feature</h2>
+        </div>
         <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
       </aside>
     </div>
@@ -214,9 +252,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       trackInset: 8
     };
 
+    const HOVER_HIGHLIGHT_COLOR = "#93c5fd";
+
     const state = {
       hoveredFeatureId: null,
       hoveredFeatureType: null,
+      pinnedFeatureId: null,
+      pinnedFeatureType: null,
       featureGroups: new Map(),
       highlightNodes: new Map(),
       zoomX: 1,
@@ -279,15 +321,102 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return groups;
     }
 
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function clearHighlightMap() {
+      state.highlightNodes = new Map();
+    }
+
+    function addHighlightNode(featureId, node, featureType) {
+      if (!state.highlightNodes.has(featureId)) {
+        state.highlightNodes.set(featureId, []);
+      }
+      state.highlightNodes.get(featureId).push({
+        node: node,
+        featureType: featureType
+      });
+    }
+
+    function styleHighlightNode(entry, mode) {
+      const node = entry.node;
+      const featureType = entry.featureType;
+      const color = mode === "pin" ? CONFIG.highlightColor : HOVER_HIGHLIGHT_COLOR;
+
+      if (featureType === "block") {
+        node.fill(color);
+      } else {
+        node.stroke(color);
+      }
+    }
+
+    function hideAllHighlights() {
+      for (const entries of state.highlightNodes.values()) {
+        for (const entry of entries) {
+          entry.node.visible(false);
+        }
+      }
+    }
+
+    function getDisplayedFeature() {
+      if (state.hoveredFeatureId && state.hoveredFeatureType) {
+        return {
+          featureId: state.hoveredFeatureId,
+          featureType: state.hoveredFeatureType,
+          source: "hover"
+        };
+      }
+
+      if (state.pinnedFeatureId && state.pinnedFeatureType) {
+        return {
+          featureId: state.pinnedFeatureId,
+          featureType: state.pinnedFeatureType,
+          source: "pin"
+        };
+      }
+
+      return null;
+    }
+
+    function applyActiveDisplay() {
+      hideAllHighlights();
+
+      const displayed = getDisplayedFeature();
+      if (!displayed) {
+        renderSidebarDefault();
+        stage.batchDraw();
+        return;
+      }
+
+      const entries = state.highlightNodes.get(displayed.featureId) || [];
+      for (const entry of entries) {
+        styleHighlightNode(entry, displayed.source);
+        entry.node.visible(true);
+      }
+
+      renderFeatureSidebar(
+        displayed.featureType,
+        displayed.featureId,
+        displayed.source === "pin"
+      );
+      stage.batchDraw();
+    }
+
     function renderSidebarDefault() {
       const sidebar = document.getElementById("sidebar");
       sidebar.innerHTML = `
-        <h2>Hovered feature</h2>
+        <div class="sidebar-header">
+          <h2>Hovered feature</h2>
+        </div>
         <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
       `;
     }
 
-    function renderFeatureSidebar(featureType, featureId) {
+    function renderFeatureSidebar(featureType, featureId, isPinned) {
       const sidebar = document.getElementById("sidebar");
       const entries = state.featureGroups.get(featureId) || [];
 
@@ -302,7 +431,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         ? `${firstInfo.block_id}:${firstInfo.aln_pos}`
         : `${firstInfo.block_id}`;
 
-      let html = `<h2>${kind}</h2><p class="hint"><b>ID:</b> ${escapeHtml(title)}</p>`;
+      let header = `
+        <div class="sidebar-header">
+          <div>
+            <h2>${kind}</h2>
+            ${isPinned ? '<div class="pin-badge">Pinned</div>' : ""}
+          </div>
+          ${state.pinnedFeatureId ? '<button id="sidebar-unpin" class="sidebar-close" type="button" aria-label="Unpin feature">✕</button>' : ""}
+        </div>
+      `;
+
+      let html = `${header}<p class="hint"><b>ID:</b> ${escapeHtml(title)}</p>`;
 
       for (const sampleName of REGION_DATA.samples.map(sample => sample.sample)) {
         const entry = entries.find(item => item.sample === sampleName);
@@ -328,67 +467,41 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       sidebar.innerHTML = html;
+
+      const unpinButton = document.getElementById("sidebar-unpin");
+      if (unpinButton) {
+        unpinButton.addEventListener("click", () => {
+          clearPinnedFeature();
+        });
+      }
     }
 
-    function escapeHtml(text) {
-      return String(text)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-    }
-
-    function clearHighlightMap() {
-      state.highlightNodes = new Map();
-    }
-
-    function setHighlight(featureType, featureId) {
-      clearHighlight();
+    function setHoveredFeature(featureType, featureId) {
       state.hoveredFeatureType = featureType;
       state.hoveredFeatureId = featureId;
-
-      const nodes = state.highlightNodes.get(featureId) || [];
-      for (const node of nodes) {
-        node.visible(true);
-      }
-
-      renderFeatureSidebar(featureType, featureId);
-      stage.batchDraw();
+      applyActiveDisplay();
     }
 
-    function clearHighlight() {
-      for (const nodes of state.highlightNodes.values()) {
-        for (const node of nodes) {
-          node.visible(false);
-        }
-      }
-
+    function clearHoveredFeature() {
       state.hoveredFeatureType = null;
       state.hoveredFeatureId = null;
-      renderSidebarDefault();
-      stage.batchDraw();
+      applyActiveDisplay();
     }
 
-    function reapplyHighlightIfVisible() {
-      if (!state.hoveredFeatureId || !state.hoveredFeatureType) {
-        return;
-      }
-
-      const nodes = state.highlightNodes.get(state.hoveredFeatureId) || [];
-      if (nodes.length === 0) {
-        renderSidebarDefault();
-        return;
-      }
-
-      for (const node of nodes) {
-        node.visible(true);
-      }
+    function setPinnedFeature(featureType, featureId) {
+      state.pinnedFeatureType = featureType;
+      state.pinnedFeatureId = featureId;
+      applyActiveDisplay();
     }
 
-    function addHighlightNode(featureId, node) {
-      if (!state.highlightNodes.has(featureId)) {
-        state.highlightNodes.set(featureId, []);
-      }
-      state.highlightNodes.get(featureId).push(node);
+    function clearPinnedFeature() {
+      state.pinnedFeatureType = null;
+      state.pinnedFeatureId = null;
+      applyActiveDisplay();
+    }
+
+    function reapplyDisplayIfVisible() {
+      applyActiveDisplay();
     }
 
     function attachInteraction(node, featureType, featureId) {
@@ -397,7 +510,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           return;
         }
         document.body.style.cursor = "pointer";
-        setHighlight(featureType, featureId);
+        setHoveredFeature(featureType, featureId);
       });
 
       node.on("mouseleave", () => {
@@ -405,7 +518,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           return;
         }
         document.body.style.cursor = "default";
-        clearHighlight();
+        clearHoveredFeature();
+      });
+
+      node.on("click", (event) => {
+        event.cancelBubble = true;
+        setPinnedFeature(featureType, featureId);
       });
     }
 
@@ -864,7 +982,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         blockHighlightLayer.add(highlight);
         interactionLayer.add(hitbox);
 
-        addHighlightNode(block.feature_id, highlight);
+        addHighlightNode(block.feature_id, highlight, "block");
         attachInteraction(hitbox, "block", block.feature_id);
       }
 
@@ -881,7 +999,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         snpHighlightLayer.add(highlight);
         interactionLayer.add(hitbox);
 
-        addHighlightNode(snp.feature_id, highlight);
+        addHighlightNode(snp.feature_id, highlight, "snp");
         attachInteraction(hitbox, "snp", snp.feature_id);
       }
     }
@@ -1095,7 +1213,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
 
       drawScrollbar(interactionLayer);
-      reapplyHighlightIfVisible();
+      reapplyDisplayIfVisible();
       stage.draw();
     }
 
