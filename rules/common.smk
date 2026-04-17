@@ -224,7 +224,8 @@ DOTPLOT_FORMATTED_DIR = DOTPLOT_DIR / "formatted"
 DOTPLOT_PDF_DIR = DOTPLOT_DIR / "pdfs"
 DOTPLOT_SVG_DIR = DOTPLOT_DIR / "svgs"
 DOTPLOT_COMBINED_DIR = DOTPLOT_DIR / "combined"
-REGION_TRACK_DIR = OUTDIR / "11_region_tracks"
+SUMMARY_STATS_DIR = OUTDIR / "11_summary_stats"
+REGION_TRACK_DIR = OUTDIR / "12_region_tracks"
 LOG_DIR = OUTDIR / "logs"
 BENCHMARK_DIR = OUTDIR / "benchmarks"
 
@@ -268,6 +269,8 @@ DOTPLOT_SIMPLE_SVGS = expand(
     pair_id=DOTPLOT_PAIR_IDS,
 )
 DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
+SUMMARY_STATS_JSON = SUMMARY_STATS_DIR / "summary_stats.json"
+SUMMARY_STATS_TXT = SUMMARY_STATS_DIR / "summary_stats.txt"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
 
 

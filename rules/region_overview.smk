@@ -3,7 +3,8 @@ rule plot_region_overview:
         samples_tsv=SAMPLES_TSV,
         block_coords_tsv=BLOCK_COORDINATES_TSV,
         snp_long=SNP_POS_LONG_TSV,
-        fastas=CLEAN_FASTAS
+        fastas=CLEAN_FASTAS,
+        stats_json=SUMMARY_STATS_JSON
     output:
         REGION_TRACK_HTML
     benchmark:
