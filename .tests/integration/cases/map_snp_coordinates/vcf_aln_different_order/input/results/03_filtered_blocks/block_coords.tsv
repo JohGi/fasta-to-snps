@@ -1,4 +1,4 @@
-block_id	sample	block_start_1based
+block_id	sample	block_start_in_zone
 1	SampleA	10
 1	SampleB	20
 1	SampleC	30
