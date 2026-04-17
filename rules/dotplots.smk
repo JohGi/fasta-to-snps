@@ -74,8 +74,8 @@ rule run_pairwise_blastn2dotplots:
         fasta_a=lambda wildcards: CLEAN_FASTA_DIR / f"{get_pair_sample_a(wildcards)}.fasta",
         fasta_b=lambda wildcards: CLEAN_FASTA_DIR / f"{get_pair_sample_b(wildcards)}.fasta"
     output:
-        simple=DOTPLOT_IMAGE_DIR / "{pair_id}.simple.pdf",
-        # highlight_crossed=DOTPLOT_IMAGE_DIR / "{pair_id}.highlight_crossed.pdf"
+        simple=DOTPLOT_PDF_DIR / "{pair_id}.simple.pdf",
+        # highlight_crossed=DOTPLOT_PDF_DIR / "{pair_id}.highlight_crossed.pdf"
     benchmark:
         BENCHMARK_DIR / "run_pairwise_blastn2dotplots" / "{pair_id}.tsv"
     log:
@@ -84,11 +84,11 @@ rule run_pairwise_blastn2dotplots:
     params:
         db_name=get_pair_sample_a,
         query_name=get_pair_sample_b,
-        simple_prefix=lambda wildcards: DOTPLOT_IMAGE_DIR / f"{wildcards.pair_id}.simple",
-        highlight_prefix=lambda wildcards: DOTPLOT_IMAGE_DIR / f"{wildcards.pair_id}.highlight_crossed"
+        simple_prefix=lambda wildcards: DOTPLOT_PDF_DIR / f"{wildcards.pair_id}.simple",
+        highlight_prefix=lambda wildcards: DOTPLOT_PDF_DIR / f"{wildcards.pair_id}.highlight_crossed"
     shell:
         r"""
-        mkdir -p "{DOTPLOT_IMAGE_DIR}" "$(dirname "{log.stdout}")"
+        mkdir -p "{DOTPLOT_PDF_DIR}" "$(dirname "{log.stdout}")"
 
         pixi run -e dotplot bash "{SCRIPTS_DIR}/run_pairwise_blastn2dotplots.sh" \
             --blastn-tsv "{input.formatted}" \
@@ -97,6 +97,47 @@ rule run_pairwise_blastn2dotplots:
             --query-name "{params.query_name}" \
             --simple-prefix "{params.simple_prefix}" \
             --highlight-prefix "{params.highlight_prefix}" \
+            1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+rule convert_pairwise_dotplot_pdf_to_svg:
+    input:
+        DOTPLOT_IMAGE_DIR / "{pair_id}.simple.pdf"
+    output:
+        DOTPLOT_SVG_DIR / "{pair_id}.simple.svg"
+    benchmark:
+        BENCHMARK_DIR / "convert_pairwise_dotplot_pdf_to_svg" / "{pair_id}.tsv"
+    log:
+        LOG_DIR / "convert_pairwise_dotplot_pdf_to_svg" / "{pair_id}.stderr"
+    shell:
+        r"""
+        mkdir -p "{DOTPLOT_SVG_DIR}" "$(dirname "{log}")"
+        pdf2svg "{input}" "{output}" 2> "{log}"
+        """
+
+
+rule build_dotplot_gallery_html:
+    input:
+        svgs=DOTPLOT_SIMPLE_SVGS
+    output:
+        DOTPLOT_GALLERY_HTML
+    benchmark:
+        BENCHMARK_DIR / "build_dotplot_gallery_html" / "dotplots_gallery.tsv"
+    log:
+        stdout=LOG_DIR / "build_dotplot_gallery_html" / "dotplots_gallery.stdout",
+        stderr=LOG_DIR / "build_dotplot_gallery_html" / "dotplots_gallery.stderr"
+    params:
+        script=SCRIPTS_DIR / "build_dotplot_gallery_html.py",
+        pivot=lambda wildcards: str(config.get("visualization", {}).get("dotplot_pivot", "")).strip()
+    shell:
+        r"""
+        mkdir -p "{DOTPLOT_COMBINED_DIR}" "$(dirname "{log.stdout}")"
+        python3 "{params.script}" \
+            --samples "{SAMPLES_TSV}" \
+            --svg-dir "{DOTPLOT_SVG_DIR}" \
+            --output "{output}" \
+            --pivot "{params.pivot}" \
             1> "{log.stdout}" \
             2> "{log.stderr}"
         """

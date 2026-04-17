@@ -221,7 +221,9 @@ DOTPLOT_DIR = OUTDIR / "10_dotplots"
 DOTPLOT_HIGHLIGHT_DIR = DOTPLOT_DIR / "highlights"
 DOTPLOT_PAF_DIR = DOTPLOT_DIR / "paf"
 DOTPLOT_FORMATTED_DIR = DOTPLOT_DIR / "formatted"
-DOTPLOT_IMAGE_DIR = DOTPLOT_DIR / "images"
+DOTPLOT_PDF_DIR = DOTPLOT_DIR / "pdfs"
+DOTPLOT_SVG_DIR = DOTPLOT_DIR / "svgs"
+DOTPLOT_COMBINED_DIR = DOTPLOT_DIR / "combined"
 REGION_TRACK_DIR = OUTDIR / "11_region_tracks"
 LOG_DIR = OUTDIR / "logs"
 BENCHMARK_DIR = OUTDIR / "benchmarks"
@@ -254,13 +256,18 @@ DOTPLOT_FORMATTED = expand(
     pair_id=DOTPLOT_PAIR_IDS,
 )
 DOTPLOT_SIMPLE_PDFS = expand(
-    DOTPLOT_IMAGE_DIR / "{pair_id}.simple.pdf",
+    DOTPLOT_PDF_DIR / "{pair_id}.simple.pdf",
     pair_id=DOTPLOT_PAIR_IDS,
 )
 DOTPLOT_HIGHLIGHT_PDFS = expand(
-    DOTPLOT_IMAGE_DIR / "{pair_id}.highlight_crossed.pdf",
+    DOTPLOT_PDF_DIR / "{pair_id}.highlight_crossed.pdf",
     pair_id=DOTPLOT_PAIR_IDS,
 )
+DOTPLOT_SIMPLE_SVGS = expand(
+    DOTPLOT_SVG_DIR / "{pair_id}.simple.svg",
+    pair_id=DOTPLOT_PAIR_IDS,
+)
+DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
 
 
