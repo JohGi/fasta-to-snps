@@ -328,19 +328,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .replaceAll(">", "&gt;");
     }
 
-    function formatSidebarKey(key) {
-      const labels = {
-        nt: "nt",
-        length: "length",
-        pos_in_zone: "pos in zone",
-        pos_in_source_seq: "pos in source seq",
-        block_start_in_zone: "block start in zone",
-        block_end_in_zone: "block end in zone",
-        block_start_in_source_seq: "block start in source seq",
-        block_end_in_source_seq: "block end in source seq"
-      };
+    function formatFeatureInfoEntries(featureType, info) {
+      if (featureType === "block") {
+        return [
+          ["Coords in zone", `${info.block_start_in_zone}-${info.block_end_in_zone}`],
+          [
+            "Coords in source seq",
+            `${info.block_start_in_source_seq}-${info.block_end_in_source_seq}`
+          ],
+          ["Length", String(info.length)]
+        ];
+      }
 
-      return labels[key] || key.replaceAll("_", " ");
+      return [
+        ["Allele", String(info.nt)],
+        ["Pos in zone", String(info.pos_in_zone)],
+        ["Pos in source seq", String(info.pos_in_source_seq)]
+      ];
     }
 
     function clearHighlightMap() {
@@ -466,13 +470,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           html += `<p class="hint">No corresponding feature in this sample.</p>`;
         } else {
           html += '<div class="kv">';
-          const hiddenKeys = new Set(["sample", "block_id", "aln_pos", "pos_in_block"]);
 
-          for (const [key, value] of Object.entries(entry.info)) {
-            if (hiddenKeys.has(key)) {
-              continue;
-            }
-            html += `<div class="key">${escapeHtml(formatSidebarKey(key))}</div><div>${escapeHtml(String(value))}</div>`;
+          const formattedEntries = formatFeatureInfoEntries(featureType, entry.info);
+          for (const [label, value] of formattedEntries) {
+            html += `<div class="key">${escapeHtml(label)}</div><div>${escapeHtml(value)}</div>`;
           }
 
           html += "</div>";
