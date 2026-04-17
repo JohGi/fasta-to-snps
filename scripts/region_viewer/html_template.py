@@ -122,6 +122,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       touch-action: none;
       user-select: none;
       cursor: default;
+      outline: none;
     }
 
     .sidebar {
@@ -185,11 +186,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="viewer-column">
         <div class="viewer-wrapper">
           <div class="viewer-toolbar">
+            <button id="pan-left" type="button">←</button>
+            <button id="pan-right" type="button">→</button>
             <button id="zoom-out" type="button">−</button>
             <button id="zoom-in" type="button">+</button>
             <button id="zoom-reset" type="button">Reset</button>
           </div>
-          <div id="viewer" class="viewer"></div>
+          <div id="viewer" class="viewer" tabindex="0"></div>
         </div>
       </div>
 
@@ -493,6 +496,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       normalizeScrollX();
     }
 
+    function moveByViewportFraction(direction, fraction = 0.1) {
+      const stepBp = getVisibleBpSpan() * fraction;
+      const currentStart = getVisibleStartBp();
+      setVisibleStartBp(currentStart + direction * stepBp);
+      redrawStage();
+    }
+
     function computePanelTop(panelIndex) {
       return CONFIG.viewerTopUiHeight + CONFIG.topMargin
         + panelIndex * (CONFIG.panelHeight + CONFIG.panelGap);
@@ -516,15 +526,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function worldXToScreenX(position) {
       const visibleStart = getVisibleStartBp();
       return CONFIG.leftMargin + (position - visibleStart) * getWorldToScreenScale();
-    }
-
-    function screenXToWorldX(screenX) {
-      const clampedX = Math.max(
-        CONFIG.leftMargin,
-        Math.min(CONFIG.leftMargin + getDrawableTrackWidth(), screenX)
-      );
-      const visibleStart = getVisibleStartBp();
-      return visibleStart + (clampedX - CONFIG.leftMargin) / getWorldToScreenScale();
     }
 
     function formatNumber(value, decimals = 0) {
@@ -682,19 +683,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       const x0 = worldXToScreenX(clippedStart);
       const x1 = worldXToScreenX(clippedEnd);
-      const y0 = panelTop + CONFIG.trackY;
-      const width = Math.max(1, x1 - x0);
+      const yTop = panelTop + CONFIG.trackY;
+      const yBottom = yTop + CONFIG.trackHeight;
 
-      const outline = new Konva.Rect({
-        x: x0,
-        y: y0,
-        width: width,
-        height: CONFIG.trackHeight,
+      layer.add(new Konva.Line({
+        points: [x0, yTop, x1, yTop],
         stroke: "black",
         strokeWidth: 1,
         listening: false
-      });
-      layer.add(outline);
+      }));
+
+      layer.add(new Konva.Line({
+        points: [x0, yBottom, x1, yBottom],
+        stroke: "black",
+        strokeWidth: 1,
+        listening: false
+      }));
+
+      if (clippedStart === 1) {
+        layer.add(new Konva.Line({
+          points: [x0, yTop, x0, yBottom],
+          stroke: "black",
+          strokeWidth: 1,
+          listening: false
+        }));
+      }
+
+      if (clippedEnd === sample.zone_length) {
+        layer.add(new Konva.Line({
+          points: [x1, yTop, x1, yBottom],
+          stroke: "black",
+          strokeWidth: 1,
+          listening: false
+        }));
+      }
     }
 
     function getFeatureY(panelTop) {
@@ -1169,6 +1191,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       redrawStage();
     });
 
+    document.getElementById("pan-left").addEventListener("click", () => {
+      moveByViewportFraction(-1, 0.1);
+    });
+
+    document.getElementById("pan-right").addEventListener("click", () => {
+      moveByViewportFraction(1, 0.1);
+    });
+
     document.getElementById("zoom-in").addEventListener("click", () => {
       zoomAroundViewportCenter(state.zoomX * getZoomFactor());
       redrawStage();
@@ -1183,6 +1213,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       state.zoomX = getInitialZoomX();
       state.scrollX = 0;
       redrawStage();
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        moveByViewportFraction(-1, 0.1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        moveByViewportFraction(1, 0.1);
+      }
     });
   </script>
 </body>
