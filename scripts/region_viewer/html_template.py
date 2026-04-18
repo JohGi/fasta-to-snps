@@ -44,6 +44,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-direction: column;
       align-items: stretch;
       padding: 20px;
+      overflow-x: hidden;
     }
 
     .content-row {
@@ -55,7 +56,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     .viewer-column {
-      flex: 1 1 auto;
+      flex: 1 1 0;
       min-width: 0;
       display: flex;
       flex-direction: column;
@@ -93,6 +94,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       position: relative;
       width: 100%%;
       min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
     .viewer-toolbar {
@@ -128,7 +131,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     .viewer {
       width: 100%%;
-      min-width: 0;
+      min-width: %(viewer_min_width)spx;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: white;
@@ -143,7 +146,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex: 0 0 %(sidebar_width)spx;
       width: %(sidebar_width)spx;
       min-width: %(sidebar_min_width)spx;
-      max-width: 70vw;
+      max-width: none;
       max-height: calc(100vh - 40px);
       overflow-y: auto;
       scrollbar-gutter: stable;
@@ -1731,5 +1734,6 @@ def build_html(region_data: dict[str, object]) -> str:
         "sidebar_width": SIDEBAR_WIDTH,
         "viewer_top_ui_height": config["viewerTopUiHeight"],
         "sidebar_min_width": SIDEBAR_MIN_WIDTH,
+        "viewer_min_width": config["minWidth"],
         "resizer_width": RESIZER_WIDTH,
     }
