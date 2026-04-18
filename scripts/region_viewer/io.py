@@ -280,7 +280,7 @@ def parse_emboss_distmat(path: Path, sample_order: list[str], block_id: str) -> 
         labels=sample_order,
         values=values,
         source="kimura2p",
-        title=f"Kimura 2P distances, block {block_id}",
+        title="Kimura 2P distances",
         unit="substitutions_per_100_bases",
     )
 

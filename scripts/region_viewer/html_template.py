@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from .constants import SIDEBAR_WIDTH
+from .constants import RESIZER_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_WIDTH
 from .payload import build_config_payload
 
 
@@ -43,8 +43,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 16px;
       padding: 20px;
+    }
+
+    .content-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      width: 100%%;
+      min-width: 0;
+    }
+
+    .viewer-column {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .column-resizer {
+      flex: 0 0 %(resizer_width)spx;
+      width: %(resizer_width)spx;
+      align-self: stretch;
+      cursor: col-resize;
+      border-radius: 999px;
+      background: transparent;
+    }
+
+    .column-resizer:hover,
+    .column-resizer.is-dragging {
+      background: #e5e7eb;
     }
 
     .info-panel {
@@ -58,21 +87,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .info-panel h2 {
       margin: 0 0 12px 0;
       font-size: 18px;
-    }
-
-    .content-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 16px;
-      width: 100%%;
-      min-width: 0;
-    }
-
-    .viewer-column {
-      flex: 1 1 auto;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
     }
 
     .viewer-wrapper {
@@ -128,10 +142,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .sidebar {
       flex: 0 0 %(sidebar_width)spx;
       width: %(sidebar_width)spx;
-      min-width: %(sidebar_width)spx;
-      max-width: %(sidebar_width)spx;
-      max-height: 80vh;
-      overflow-y: scroll;
+      min-width: %(sidebar_min_width)spx;
+      max-width: 70vw;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
       scrollbar-gutter: stable;
       padding: 14px;
       border: 1px solid var(--border);
@@ -150,6 +164,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .sidebar-header h2 {
       margin: 0;
       font-size: 18px;
+    }
+
+    .sidebar-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sidebar-section:first-child {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+
+    .sidebar-section h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
     }
 
     .pin-badge {
@@ -209,17 +240,77 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .kv .key {
       color: var(--muted);
     }
+
+    .distance-matrix-card,
+    .summary-card {
+      width: 100%%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+    }
+
+    .distance-matrix-title {
+      margin: 0 0 4px 0;
+      font-size: 15px;
+      font-weight: bold;
+    }
+
+    .distance-matrix-scroll {
+      overflow-x: auto;
+      max-width: 100%%;
+    }
+
+    .distance-matrix-table {
+      width: max-content;
+      min-width: 100%%;
+      border-collapse: collapse;
+      table-layout: auto;
+      font-size: 11px;
+    }
+
+    .distance-matrix-table th,
+    .distance-matrix-table td {
+      border: 1px solid var(--border);
+      padding: 5px 8px;
+      text-align: center;
+      white-space: nowrap;
+      min-width: 58px;
+    }
+
+    .distance-matrix-table th {
+      background: #f7f7f7;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .distance-matrix-table th.row-label {
+      min-width: 72px;
+      text-align: left;
+      color: var(--text);
+      font-weight: bold;
+    }
+
+    .distance-matrix-table td.matrix-empty {
+      background: #f7f7f7;
+      color: transparent;
+    }
+
+    .summary-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+    }
   </style>
 </head>
 <body>
   <div class="app">
-    <section id="info-panel" class="info-panel">
-      <h2>Region viewer</h2>
-      <p class="hint">Hover a block or a SNP to highlight the corresponding feature across all samples. Click a feature to pin it in the sidebar.</p>
-    </section>
+    <div class="content-row" id="content-row">
+      <div class="viewer-column" id="viewer-column">
+        <section id="info-panel" class="info-panel">
+          <h2>Region viewer</h2>
+          <p class="hint">Hover a block or a SNP to highlight the corresponding feature across all samples. Click a feature to pin it in the sidebar.</p>
+        </section>
 
-    <div class="content-row">
-      <div class="viewer-column">
         <div class="viewer-wrapper">
           <div class="viewer-toolbar">
             <button id="pan-left" type="button">←</button>
@@ -232,11 +323,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </div>
 
+      <div id="column-resizer" class="column-resizer" aria-label="Resize sidebar"></div>
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
-          <h2>Hovered feature</h2>
+          <h2>Region overview</h2>
         </div>
-        <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
+        <p class="hint">Loading region summary.</p>
       </aside>
     </div>
   </div>
@@ -326,6 +418,127 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;");
+    }
+
+    function getSampleOrder() {
+      return REGION_DATA.samples.map(sample => sample.sample);
+    }
+
+    function formatDistanceValue(value) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return "NA";
+      }
+
+      const numericValue = Number(value);
+      const normalizedValue = Math.abs(numericValue) < 1e-9 ? 0 : numericValue;
+
+      if (Math.abs(normalizedValue) >= 10) {
+        return formatNumber(normalizedValue, 1);
+      }
+
+      if (Math.abs(normalizedValue) >= 1) {
+        return formatNumber(normalizedValue, 2);
+      }
+
+      return formatNumber(normalizedValue, 4);
+    }
+
+    function renderDistanceMatrix(matrix) {
+      if (!matrix || !matrix.labels || !matrix.values) {
+        return `
+          <div class="distance-matrix-card">
+            <p class="hint">No distance matrix available.</p>
+          </div>
+        `;
+      }
+
+      const labels = matrix.labels;
+      let html = `
+        <div class="distance-matrix-card">
+          <p class="distance-matrix-title">${escapeHtml(matrix.title || "Distance matrix")}</p>
+          <div class="distance-matrix-scroll">
+            <table class="distance-matrix-table">
+              <thead>
+                <tr>
+                  <th></th>
+      `;
+
+      for (const label of labels) {
+        html += `<th>${escapeHtml(label)}</th>`;
+      }
+
+      html += `
+                </tr>
+              </thead>
+              <tbody>
+      `;
+
+      labels.forEach((rowLabel, rowIndex) => {
+        html += `<tr><th class="row-label">${escapeHtml(rowLabel)}</th>`;
+
+        labels.forEach((_colLabel, colIndex) => {
+          if (colIndex < rowIndex) {
+            html += `<td class="matrix-empty"></td>`;
+            return;
+          }
+
+          const value = matrix.values[rowIndex]?.[colIndex];
+          html += `<td>${escapeHtml(formatDistanceValue(value))}</td>`;
+        });
+
+        html += `</tr>`;
+      });
+
+      html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      return html;
+    }
+
+    function renderGlobalSummaryStats() {
+      const globalStats = REGION_DATA.summary_stats?.global;
+
+      if (!globalStats) {
+        return `
+          <div class="summary-card">
+            <h3>Global statistics</h3>
+            <p class="hint">No summary statistics available.</p>
+          </div>
+        `;
+      }
+
+      const entries = [
+        ["Kept blocks", globalStats.n_blocks_kept],
+        ["Smallest block (bp)", globalStats.min_block_len_bp],
+        ["Largest block (bp)", globalStats.max_block_len_bp],
+        ["Mean block length (bp)", globalStats.mean_block_len_bp],
+        ["Kept SNPs", globalStats.n_snps_kept]
+      ];
+
+      let html = `
+        <div class="summary-card">
+          <h3>Global statistics</h3>
+          <div class="kv">
+      `;
+
+      for (const [label, value] of entries) {
+        html += `<div class="key">${escapeHtml(label)}</div><div>${escapeHtml(value)}</div>`;
+      }
+
+      html += `
+          </div>
+        </div>
+      `;
+
+      return html;
+    }
+
+    function getMaskedNStats(blockId, sampleName) {
+      return REGION_DATA.masked_block_n_stats?.[String(blockId)]?.[sampleName] || null;
     }
 
     function formatFeatureInfoEntries(featureType, info) {
@@ -429,13 +642,39 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const sidebar = document.getElementById("sidebar");
       sidebar.innerHTML = `
         <div class="sidebar-header">
-          <h2>Hovered feature</h2>
+          <h2>Region overview</h2>
         </div>
-        <p class="hint">Hover a block or a SNP to display its details across all samples.</p>
+        <div class="sidebar-section">
+          ${renderDistanceMatrix(REGION_DATA.mash_matrix)}
+        </div>
+        <div class="sidebar-section">
+          ${renderGlobalSummaryStats()}
+        </div>
       `;
     }
 
-    function renderFeatureSidebar(featureType, featureId, isPinned) {
+    function renderSidebarHeader(title, isPinned) {
+      return `
+        <div class="sidebar-header">
+          <div>
+            <h2>${escapeHtml(title)}</h2>
+            ${isPinned ? '<div class="pin-badge">Pinned</div>' : ""}
+          </div>
+          ${state.pinnedFeatureId ? '<button id="sidebar-unpin" class="sidebar-close" type="button" aria-label="Unpin feature">✕</button>' : ""}
+        </div>
+      `;
+    }
+
+    function attachSidebarUnpinHandler() {
+      const unpinButton = document.getElementById("sidebar-unpin");
+      if (unpinButton) {
+        unpinButton.addEventListener("click", () => {
+          clearPinnedFeature();
+        });
+      }
+    }
+
+    function renderBlockSidebar(featureId, isPinned) {
       const sidebar = document.getElementById("sidebar");
       const entries = state.featureGroups.get(featureId) || [];
 
@@ -444,34 +683,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         return;
       }
 
-      const kind = featureType === "snp" ? "SNP" : "Collinear block";
       const firstInfo = entries[0].info;
-      const title = featureType === "snp"
-        ? `${firstInfo.block_id}:${firstInfo.aln_pos}`
-        : `${firstInfo.block_id}`;
+      const blockId = String(firstInfo.block_id);
+      const matrix = REGION_DATA.kimura2p_matrices?.[blockId];
 
-      const header = `
-        <div class="sidebar-header">
-          <div>
-            <h2>${kind}</h2>
-            ${isPinned ? '<div class="pin-badge">Pinned</div>' : ""}
-          </div>
-          ${state.pinnedFeatureId ? '<button id="sidebar-unpin" class="sidebar-close" type="button" aria-label="Unpin feature">✕</button>' : ""}
+      let html = `
+        ${renderSidebarHeader("Collinear block", isPinned)}
+        <p class="hint"><b>ID:</b> ${escapeHtml(blockId)}</p>
+        <div class="sidebar-section">
+          ${renderDistanceMatrix(matrix)}
         </div>
       `;
 
-      let html = `${header}<p class="hint"><b>ID:</b> ${escapeHtml(title)}</p>`;
-
-      for (const sampleName of REGION_DATA.samples.map(sample => sample.sample)) {
+      for (const sampleName of getSampleOrder()) {
         const entry = entries.find(item => item.sample === sampleName);
         html += `<div class="sample-card"><h3>${escapeHtml(sampleName)}</h3>`;
 
         if (!entry) {
           html += `<p class="hint">No corresponding feature in this sample.</p>`;
         } else {
+          const nStats = getMaskedNStats(blockId, sampleName);
+          const formattedEntries = formatFeatureInfoEntries("block", entry.info);
+
+          if (nStats) {
+            formattedEntries.push(["Masked N (%%)", `${formatNumber(Number(nStats.n_pct), 2)}%%`]);
+          } else {
+            formattedEntries.push(["Masked N (%%)", "NA"]);
+          }
+
           html += '<div class="kv">';
 
-          const formattedEntries = formatFeatureInfoEntries(featureType, entry.info);
           for (const [label, value] of formattedEntries) {
             html += `<div class="key">${escapeHtml(label)}</div><div>${escapeHtml(value)}</div>`;
           }
@@ -483,13 +724,54 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       sidebar.innerHTML = html;
+      attachSidebarUnpinHandler();
+    }
 
-      const unpinButton = document.getElementById("sidebar-unpin");
-      if (unpinButton) {
-        unpinButton.addEventListener("click", () => {
-          clearPinnedFeature();
-        });
+    function renderSnpSidebar(featureId, isPinned) {
+      const sidebar = document.getElementById("sidebar");
+      const entries = state.featureGroups.get(featureId) || [];
+
+      if (entries.length === 0) {
+        renderSidebarDefault();
+        return;
       }
+
+      const firstInfo = entries[0].info;
+      const title = `${firstInfo.block_id}:${firstInfo.aln_pos}`;
+
+      let html = `${renderSidebarHeader("SNP", isPinned)}<p class="hint"><b>ID:</b> ${escapeHtml(title)}</p>`;
+
+      for (const sampleName of getSampleOrder()) {
+        const entry = entries.find(item => item.sample === sampleName);
+        html += `<div class="sample-card"><h3>${escapeHtml(sampleName)}</h3>`;
+
+        if (!entry) {
+          html += `<p class="hint">No corresponding feature in this sample.</p>`;
+        } else {
+          html += '<div class="kv">';
+
+          const formattedEntries = formatFeatureInfoEntries("snp", entry.info);
+          for (const [label, value] of formattedEntries) {
+            html += `<div class="key">${escapeHtml(label)}</div><div>${escapeHtml(value)}</div>`;
+          }
+
+          html += "</div>";
+        }
+
+        html += "</div>";
+      }
+
+      sidebar.innerHTML = html;
+      attachSidebarUnpinHandler();
+    }
+
+    function renderFeatureSidebar(featureType, featureId, isPinned) {
+      if (featureType === "block") {
+        renderBlockSidebar(featureId, isPinned);
+        return;
+      }
+
+      renderSnpSidebar(featureId, isPinned);
     }
 
     function setHoveredFeature(featureType, featureId) {
@@ -1287,6 +1569,63 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
     }
 
+    function setupColumnResizer() {
+      const contentRow = document.getElementById("content-row");
+      const sidebar = document.getElementById("sidebar");
+      const resizer = document.getElementById("column-resizer");
+
+      if (!contentRow || !sidebar || !resizer) {
+        return;
+      }
+
+      let isResizing = false;
+
+      resizer.addEventListener("pointerdown", (event) => {
+        isResizing = true;
+        resizer.classList.add("is-dragging");
+        document.body.style.cursor = "col-resize";
+        resizer.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+
+      resizer.addEventListener("pointermove", (event) => {
+        if (!isResizing) {
+          return;
+        }
+
+        const rowRect = contentRow.getBoundingClientRect();
+        const maxSidebarWidth = rowRect.width * CONFIG.sidebarMaxWidthRatio;
+        const proposedWidth = rowRect.right - event.clientX;
+        const sidebarWidth = Math.max(
+          CONFIG.sidebarMinWidth,
+          Math.min(maxSidebarWidth, proposedWidth)
+        );
+
+        sidebar.style.flexBasis = `${sidebarWidth}px`;
+        sidebar.style.width = `${sidebarWidth}px`;
+
+        normalizeScrollX();
+        redrawStage();
+      });
+
+      function stopColumnResize(event) {
+        if (!isResizing) {
+          return;
+        }
+
+        isResizing = false;
+        resizer.classList.remove("is-dragging");
+        document.body.style.cursor = "default";
+
+        if (resizer.hasPointerCapture(event.pointerId)) {
+          resizer.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      resizer.addEventListener("pointerup", stopColumnResize);
+      resizer.addEventListener("pointercancel", stopColumnResize);
+    }
+
     stage.on("pointerdown", (event) => {
       if (event.target !== stage) {
         return;
@@ -1337,6 +1676,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     state.zoomX = getInitialZoomX();
     state.scrollX = 0;
     redrawStage();
+    setupColumnResizer();
 
     window.addEventListener("resize", () => {
       normalizeScrollX();
@@ -1390,4 +1730,6 @@ def build_html(region_data: dict[str, object]) -> str:
         "config": json.dumps(config),
         "sidebar_width": SIDEBAR_WIDTH,
         "viewer_top_ui_height": config["viewerTopUiHeight"],
+        "sidebar_min_width": SIDEBAR_MIN_WIDTH,
+        "resizer_width": RESIZER_WIDTH,
     }

@@ -32,6 +32,9 @@ from .constants import (
     VIEWER_MIN_WIDTH,
     VIEWER_TOP_UI_HEIGHT,
     ZOOM_STEPS,
+    RESIZER_WIDTH,
+    SIDEBAR_MAX_WIDTH_RATIO,
+    SIDEBAR_MIN_WIDTH,
 )
 from .models import BlockFeature, SampleData, SampleRecord, SnpFeature
 
@@ -155,4 +158,7 @@ def build_config_payload() -> dict[str, object]:
         "snpHighlightMinWidthPx": SNP_HIGHLIGHT_MIN_WIDTH_PX,
         "pinHighlightColor": PIN_HIGHLIGHT_COLOR,
         "hoverHighlightColor": HOVER_HIGHLIGHT_COLOR,
+        "sidebarMinWidth": SIDEBAR_MIN_WIDTH,
+        "sidebarMaxWidthRatio": SIDEBAR_MAX_WIDTH_RATIO,
+        "resizerWidth": RESIZER_WIDTH,
     }
