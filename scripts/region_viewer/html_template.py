@@ -446,6 +446,99 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return formatNumber(normalizedValue, 4);
     }
 
+    function getMatrixColorScaleBounds(matrix) {
+      const values = [];
+
+      matrix.values.forEach((row, rowIndex) => {
+        row.forEach((value, colIndex) => {
+          if (rowIndex === colIndex) {
+            return;
+          }
+
+          const numericValue = Number(value);
+          if (!Number.isNaN(numericValue)) {
+            values.push(numericValue);
+          }
+        });
+      });
+
+      if (values.length === 0) {
+        return { min: 0, max: 1 };
+      }
+
+      return {
+        min: Math.min(...values),
+        max: Math.max(...values)
+      };
+    }
+
+    function getKimura2pGlobalColorScaleBounds() {
+      const values = [];
+
+      Object.values(REGION_DATA.kimura2p_matrices || {}).forEach(matrix => {
+        if (!matrix || !matrix.values) {
+          return;
+        }
+
+        matrix.values.forEach((row, rowIndex) => {
+          row.forEach((value, colIndex) => {
+            if (rowIndex === colIndex) {
+              return;
+            }
+
+            const numericValue = Number(value);
+            if (!Number.isNaN(numericValue)) {
+              values.push(numericValue);
+            }
+          });
+        });
+      });
+
+      if (values.length === 0) {
+        return { min: 0, max: 1 };
+      }
+
+      return {
+        min: Math.min(...values),
+        max: Math.max(...values)
+      };
+    }
+
+    function interpolateChannel(start, end, ratio) {
+      return Math.round(start + (end - start) * ratio);
+    }
+
+    function interpolateRgb(start, end, ratio) {
+      return [
+        interpolateChannel(start[0], end[0], ratio),
+        interpolateChannel(start[1], end[1], ratio),
+        interpolateChannel(start[2], end[2], ratio)
+      ];
+    }
+
+    function matrixCellColor(value, minValue, maxValue, isDiagonal) {
+      if (isDiagonal) {
+        return "rgb(102, 190, 125)";
+      }
+
+      const numericValue = Number(value);
+      if (Number.isNaN(numericValue) || maxValue <= minValue) {
+        return "#ffffff";
+      }
+
+      const ratio = Math.max(0, Math.min(1, (numericValue - minValue) / (maxValue - minValue)));
+
+      const green = [102, 190, 125];
+      const yellow = [255, 235, 132];
+      const orange = [248, 172, 89];
+
+      const rgb = ratio <= 0.5
+        ? interpolateRgb(green, yellow, ratio / 0.5)
+        : interpolateRgb(yellow, orange, (ratio - 0.5) / 0.5);
+
+      return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+
     function renderDistanceMatrix(matrix) {
       if (!matrix || !matrix.labels || !matrix.values) {
         return `
@@ -456,6 +549,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       const labels = matrix.labels;
+      const colorScale = matrix.source === "kimura2p"
+      ? getKimura2pGlobalColorScaleBounds()
+      : getMatrixColorScaleBounds(matrix);
       let html = `
         <div class="distance-matrix-card">
           <p class="distance-matrix-title">${escapeHtml(matrix.title || "Distance matrix")}</p>
@@ -486,7 +582,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           }
 
           const value = matrix.values[rowIndex]?.[colIndex];
-          html += `<td>${escapeHtml(formatDistanceValue(value))}</td>`;
+          const backgroundColor = matrixCellColor(
+            value,
+            colorScale.min,
+            colorScale.max,
+            rowIndex === colIndex
+          );
+
+          html += `<td style="background-color: ${backgroundColor};">${escapeHtml(formatDistanceValue(value))}</td>`;
         });
 
         html += `</tr>`;
