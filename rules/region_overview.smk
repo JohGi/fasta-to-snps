@@ -6,7 +6,8 @@ rule plot_region_overview:
         fastas=CLEAN_FASTAS,
         stats_json=SUMMARY_STATS_JSON,
         mash_dists_tsv=MASHTREE_MATRIX,
-        n_stats_tsv=MASKED_BLOCK_N_STATS_TSV
+        n_stats_tsv=MASKED_BLOCK_N_STATS_TSV,
+        distmat_sentinels=get_distmat_chunk_sentinels
     output:
         REGION_TRACK_HTML
     benchmark:

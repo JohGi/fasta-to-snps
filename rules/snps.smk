@@ -60,7 +60,7 @@ rule align_block_chunk:
 
 rule detect_snps:
     input:
-        align_done=get_align_chunk_outputs
+        align_sentinels=get_align_chunk_sentinels
     output:
         SNP_VCF
     benchmark:

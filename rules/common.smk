@@ -182,24 +182,26 @@ def get_alignment_inputs(wildcards) -> list[Path]:
     return inputs
 
 
-# def get_unmasked_alignment_inputs(wildcards) -> dict[str, Path]:
-#     """Return prerequisite inputs for one unmasked alignment chunk."""
-#     return {
-#         "chunk_list": MASK_CHUNK_DIR / f"{wildcards.chunk_id}.list",
-#         "split_block_dir": get_split_block_dir(),
-#     }
 def get_unmasked_chunk_list(wildcards) -> Path:
     """Return the chunk list for one unmasked alignment chunk."""
     return MASK_CHUNK_DIR / f"{wildcards.chunk_id}.list"
 
-def get_align_chunk_outputs(_wildcards=None) -> list[Path]:
+def get_align_chunk_sentinels(_wildcards=None) -> list[Path]:
     """Return all alignment chunk completion markers after checkpoint completion."""
     return [ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
 
 
-def get_unmasked_align_chunk_outputs(_wildcards=None) -> list[Path]:
-    """Return all unmasked alignment chunk completion markers after checkpoint completion."""
-    return [UNMASKED_ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
+# def get_unmasked_align_chunk_sentinels(_wildcards=None) -> list[Path]:
+#     """Return all unmasked alignment chunk completion markers after checkpoint completion."""
+#     return [UNMASKED_ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
+
+
+def get_distmat_chunk_sentinels(_wildcards=None) -> list[Path]:
+    """Return all distmat chunk completion markers after checkpoint completion."""
+    return [
+        KIMURA2P_DISTMAT_CHUNK_DIR / f"{chunk_id}.done"
+        for chunk_id in get_chunk_ids()
+    ]
 
 
 def get_final_snp_output() -> Path:
@@ -249,6 +251,9 @@ REGION_TRACK_DIR = OUTDIR / "12_region_tracks"
 MASH_DISTANCES_DIR = OUTDIR / "13_mash_distances"
 BLOCK_STATS_DIR = OUTDIR / "14_block_stats"
 UNMASKED_ALIGN_DIR = BLOCK_STATS_DIR / "unmasked_alignments"
+KIMURA2P_DISTMAT_DIR = BLOCK_STATS_DIR / "kimura2p_distances"
+KIMURA2P_DISTMAT_MATRIX_DIR = KIMURA2P_DISTMAT_DIR / "matrices"
+KIMURA2P_DISTMAT_CHUNK_DIR = KIMURA2P_DISTMAT_DIR / "chunks"
 LOG_DIR = OUTDIR / "logs"
 BENCHMARK_DIR = OUTDIR / "benchmarks"
 

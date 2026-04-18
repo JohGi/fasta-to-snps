@@ -15,8 +15,7 @@ rule all:
         SNP_POS_LONG_TSV,
         SNP_POS_WIDE_TSV,
         DOTPLOT_SIMPLE_PDFS,
-        # DOTPLOT_HIGHLIGHT_PDFS
         REGION_TRACK_HTML,
         DOTPLOT_GALLERY_HTML,
         SUMMARY_STATS_TXT,
-        get_unmasked_align_chunk_outputs
+        

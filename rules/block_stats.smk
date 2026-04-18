@@ -49,3 +49,29 @@ rule align_unmasked_block_chunk:
             2> "{log.stderr}"
         touch "{output}"
         """
+
+rule compute_kimura2p_distmat_chunk:
+    input:
+        chunk_list=MASK_CHUNK_DIR / "{chunk_id}.list",
+        unmasked_align_done=UNMASKED_ALIGN_DIR / "{chunk_id}.done"
+    output:
+        KIMURA2P_DISTMAT_CHUNK_DIR / "{chunk_id}.done"
+    benchmark:
+        BENCHMARK_DIR / "compute_kimura2p_distmat_chunk" / "{chunk_id}.tsv"
+    log:
+        stdout=LOG_DIR / "compute_kimura2p_distmat_chunk" / "{chunk_id}.stdout",
+        stderr=LOG_DIR / "compute_kimura2p_distmat_chunk" / "{chunk_id}.stderr"
+    params:
+        aln_dir=str(UNMASKED_ALIGN_DIR),
+        outdir=str(KIMURA2P_DISTMAT_MATRIX_DIR)
+    shell:
+        r"""
+        mkdir -p "{params.outdir}" "{KIMURA2P_DISTMAT_CHUNK_DIR}" "$(dirname "{log.stdout}")" && \
+        bash "{SCRIPTS_DIR}/compute_kimura2p_distmat_chunk.sh" \
+            --chunk-list "{input.chunk_list}" \
+            --aln-dir "{params.aln_dir}" \
+            --outdir "{params.outdir}" \
+            1> "{log.stdout}" \
+            2> "{log.stderr}" && \
+        touch "{output}"
+        """
