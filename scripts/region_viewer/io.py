@@ -6,12 +6,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
+import json
 import logging
 
-from .models import BlockFeature, SampleRecord, SnpFeature
+from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix
 
 
 LOGGER = logging.getLogger(__name__)
+
+# FLOAT_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 
 
@@ -154,6 +157,151 @@ def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
         snps_by_sample.setdefault(snp.sample, []).append(snp)
 
     return snps_by_sample
+
+
+def read_summary_stats(path: Path) -> dict[str, object]:
+    """Read summary statistics from a JSON file."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_masked_block_n_stats(
+    path: Path,
+) -> dict[str, dict[str, dict[str, int | float]]]:
+    """Read masked block N-content statistics as a nested dictionary."""
+    dataframe = pl.read_csv(path, separator="\t")
+
+    stats: dict[str, dict[str, dict[str, int | float]]] = {}
+
+    for row in dataframe.iter_rows(named=True):
+        block_id = str(row["block_id"])
+        sample = str(row["sample"])
+
+        stats.setdefault(block_id, {})[sample] = {
+            "length_bp": int(row["length_bp"]),
+            "n_count": int(row["n_count"]),
+            "n_pct": float(row["n_pct"]),
+        }
+
+    return stats
+
+
+def normalize_distance(value: float) -> float:
+    """Normalize near-zero distances."""
+    return 0.0 if abs(value) < 1e-9 else value
+
+
+def parse_mash_matrix(path: Path, sample_order: list[str]) -> DistanceMatrix:
+    """Parse a Mash square distance matrix."""
+    rows = path.read_text(encoding="utf-8").splitlines()
+    header = rows[0].split("\t")[1:]
+
+    values_by_pair: dict[tuple[str, str], float] = {}
+
+    for row in rows[1:]:
+        fields = row.split("\t")
+        row_label = fields[0]
+        distances = [float(value) for value in fields[1:]]
+
+        for col_label, distance in zip(header, distances):
+            values_by_pair[(row_label, col_label)] = normalize_distance(distance)
+
+    values = [
+        [
+            values_by_pair[(row_label, col_label)]
+            for col_label in sample_order
+        ]
+        for row_label in sample_order
+    ]
+
+    return DistanceMatrix(
+        labels=sample_order,
+        values=values,
+        source="mash",
+        title="Mash distances, whole region",
+        unit="mash_distance",
+    )
+
+
+def parse_emboss_distmat(path: Path, sample_order: list[str], block_id: str) -> DistanceMatrix:
+    """Parse an EMBOSS distmat triangular matrix."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+
+    labels: list[str] = []
+    triangle_rows: list[list[float]] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        tokens = stripped.split()
+        if len(tokens) < 2:
+            continue
+
+        if not tokens[-1].isdigit():
+            continue
+
+        label = tokens[-2]
+        numeric_part = tokens[:-2]
+
+        try:
+            distances = [normalize_distance(float(value)) for value in numeric_part]
+        except ValueError:
+            continue
+
+        labels.append(label)
+        triangle_rows.append(distances)
+
+    n = len(labels)
+    matrix_by_label = {
+        label: {other_label: 0.0 for other_label in labels}
+        for label in labels
+    }
+
+    for row_index, row_values in enumerate(triangle_rows):
+        row_label = labels[row_index]
+
+        for offset, distance in enumerate(row_values):
+            col_index = row_index + offset
+            col_label = labels[col_index]
+
+            matrix_by_label[row_label][col_label] = distance
+            matrix_by_label[col_label][row_label] = distance
+
+    values = [
+        [
+            matrix_by_label[row_label][col_label]
+            for col_label in sample_order
+        ]
+        for row_label in sample_order
+    ]
+
+    return DistanceMatrix(
+        labels=sample_order,
+        values=values,
+        source="kimura2p",
+        title=f"Kimura 2P distances, block {block_id}",
+        unit="substitutions_per_100_bases",
+    )
+
+
+def parse_kimura2p_distmat_dir(
+    distmat_dir: Path,
+    sample_order: list[str],
+) -> dict[str, dict[str, object]]:
+    """Parse all Kimura 2P EMBOSS distmat files from a directory."""
+    matrices = {}
+
+    for path in sorted(distmat_dir.glob("*.kimura2p.distmat")):
+        block_id = path.name.split(".", 1)[0]
+        matrices[block_id] = parse_emboss_distmat(
+            path=path,
+            sample_order=sample_order,
+            block_id=block_id,
+        ).to_dict()
+
+    return matrices
+
 
 def write_html(html: str, output_path: Path) -> None:
     """Write the final HTML file."""

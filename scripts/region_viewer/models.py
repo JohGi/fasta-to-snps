@@ -59,3 +59,24 @@ class SampleData:
     zone_length: int
     blocks: list[BlockFeature] = field(factory=list)
     snps: list[SnpFeature] = field(factory=list)
+
+
+@define(frozen=True)
+class DistanceMatrix:
+    """Represent a square distance matrix."""
+
+    labels: list[str]
+    values: list[list[float]]
+    source: str
+    title: str
+    unit: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Convert the distance matrix to a JSON-compatible dictionary."""
+        return {
+            "labels": self.labels,
+            "values": self.values,
+            "source": self.source,
+            "title": self.title,
+            "unit": self.unit,
+        }

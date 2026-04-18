@@ -72,11 +72,17 @@ def build_sample_data(
     return sample_data
 
 
-def build_region_payload(sample_data: list[SampleData]) -> dict[str, object]:
+def build_region_payload(
+    sample_data: list[SampleData],
+    summary_stats: dict[str, object] | None = None,
+    mash_matrix: dict[str, object] | None = None,
+    kimura2p_matrices: dict[str, dict[str, object]] | None = None,
+    masked_block_n_stats: dict[str, dict[str, dict[str, int | float]]] | None = None,
+) -> dict[str, object]:
     """Build the JSON payload injected into the HTML."""
     max_zone_length = max(sample.zone_length for sample in sample_data)
 
-    return {
+    payload: dict[str, object] = {
         "title": "Region overview",
         "max_zone_length": max_zone_length,
         "samples": [
@@ -109,7 +115,13 @@ def build_region_payload(sample_data: list[SampleData]) -> dict[str, object]:
             }
             for sample in sample_data
         ],
+        "summary_stats": summary_stats or {},
+        "mash_matrix": mash_matrix or {},
+        "kimura2p_matrices": kimura2p_matrices or {},
+        "masked_block_n_stats": masked_block_n_stats or {},
     }
+
+    return payload
 
 
 def build_config_payload() -> dict[str, object]:

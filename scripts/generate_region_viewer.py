@@ -24,6 +24,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--block-coords-tsv", type=Path, required=True)
     parser.add_argument("--snp-long", type=Path, required=True)
     parser.add_argument("--fasta-dir", type=Path, required=True)
+    parser.add_argument("--summary-stats-json", type=Path, required=True)
+    parser.add_argument("--mash-matrix", type=Path, required=True)
+    parser.add_argument("--kimura2p-distmat-dir", type=Path, required=True)
+    parser.add_argument("--masked-block-n-stats", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--log-level",
@@ -51,6 +55,10 @@ def main() -> None:
         block_coords_tsv_path=args.block_coords_tsv,
         snp_long_path=args.snp_long,
         fasta_dir=args.fasta_dir,
+        summary_stats_json_path=args.summary_stats_json,
+        mash_matrix_path=args.mash_matrix,
+        kimura2p_distmat_dir=args.kimura2p_distmat_dir,
+        masked_block_n_stats_path=args.masked_block_n_stats,
         output_path=args.output,
     )
     builder.run()

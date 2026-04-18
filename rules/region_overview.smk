@@ -1,4 +1,4 @@
-rule plot_region_overview:
+rule generate_region_viewer:
     input:
         samples_tsv=SAMPLES_TSV,
         block_coords_tsv=BLOCK_COORDINATES_TSV,
@@ -11,18 +11,22 @@ rule plot_region_overview:
     output:
         REGION_TRACK_HTML
     benchmark:
-        BENCHMARK_DIR / "plot_region_overview.tsv"
+        BENCHMARK_DIR / "generate_region_viewer.tsv"
     log:
-        stdout=LOG_DIR / "plot_region_overview" / "plot_region_overview.stdout",
-        stderr=LOG_DIR / "plot_region_overview" / "plot_region_overview.stderr"
+        stdout=LOG_DIR / "generate_region_viewer" / "generate_region_viewer.stdout",
+        stderr=LOG_DIR / "generate_region_viewer" / "generate_region_viewer.stderr"
     shell:
         r"""
         mkdir -p "{REGION_TRACK_DIR}" "$(dirname "{log.stdout}")"
-        python3 "{SCRIPTS_DIR}/plot_region_overview.py" \
+        python3 "{SCRIPTS_DIR}/generate_region_viewer.py" \
             --samples-tsv "{input.samples_tsv}" \
             --block-coords-tsv "{input.block_coords_tsv}" \
             --snp-long "{input.snp_long}" \
             --fasta-dir "{CLEAN_FASTA_DIR}" \
+            --summary-stats-json "{input.stats_json}" \
+            --mash-matrix "{input.mash_dists_tsv}" \
+            --kimura2p-distmat-dir "{KIMURA2P_DISTMAT_MATRIX_DIR}" \
+            --masked-block-n-stats "{input.n_stats_tsv}" \
             --output "{output}" \
             1> "{log.stdout}" \
             2> "{log.stderr}"
