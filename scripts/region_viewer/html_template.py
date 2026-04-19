@@ -32,6 +32,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       box-sizing: border-box;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
@@ -106,27 +110,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       height: var(--viewer-top-ui-height);
       z-index: 10;
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
       align-items: center;
       gap: 8px;
       padding: 8px 10px 0 10px;
       pointer-events: none;
     }
 
+    .viewer-toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+
     .viewer-toolbar button {
-      padding: 6px 10px;
+      min-width: 36px;
+      padding: 5px 9px;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.94);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.88);
       color: var(--text);
       cursor: pointer;
-      font-size: 13px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      font-size: 12px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
       pointer-events: auto;
     }
 
     .viewer-toolbar button:hover {
       background: #f5f5f5;
+    }
+
+    .viewer-toolbar .feature-nav-button {
+      font-weight: normal;
+      min-width: 76px;
     }
 
     .viewer {
@@ -369,11 +386,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div class="viewer-wrapper">
           <div class="viewer-toolbar">
-            <button id="pan-left" type="button">←</button>
-            <button id="pan-right" type="button">→</button>
-            <button id="zoom-out" type="button">−</button>
-            <button id="zoom-in" type="button">+</button>
-            <button id="zoom-reset" type="button">Reset</button>
+            <div class="viewer-toolbar-group">
+              <button id="feature-prev" class="feature-nav-button hidden" type="button">Previous</button>
+              <button id="feature-next" class="feature-nav-button hidden" type="button">Next</button>
+            </div>
+            <div class="viewer-toolbar-group">
+              <button id="pan-left" type="button">←</button>
+              <button id="pan-right" type="button">→</button>
+              <button id="zoom-out" type="button">−</button>
+              <button id="zoom-in" type="button">+</button>
+              <button id="zoom-reset" type="button">Reset</button>
+            </div>
           </div>
           <div id="viewer" class="viewer" tabindex="0"></div>
         </div>
@@ -508,6 +531,83 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       return groups;
+    }
+
+    function getOrderedBlockFeatureIds() {
+      const positionsByFeatureId = new Map();
+
+      for (const sample of REGION_DATA.samples) {
+        for (const block of sample.blocks) {
+          if (!positionsByFeatureId.has(block.feature_id)) {
+            positionsByFeatureId.set(block.feature_id, Number(block.block_start_in_zone));
+          }
+        }
+      }
+
+      return [...positionsByFeatureId.entries()]
+        .sort((left, right) => left[1] - right[1])
+        .map(([featureId]) => featureId);
+    }
+
+    function getOrderedSnpFeatureIds() {
+      const positionsByFeatureId = new Map();
+
+      for (const sample of REGION_DATA.samples) {
+        for (const snp of sample.snps) {
+          if (!positionsByFeatureId.has(snp.feature_id)) {
+            positionsByFeatureId.set(snp.feature_id, Number(snp.pos_in_zone));
+          }
+        }
+      }
+
+      return [...positionsByFeatureId.entries()]
+        .sort((left, right) => left[1] - right[1])
+        .map(([featureId]) => featureId);
+    }
+
+    function getWrappedNeighbor(items, currentItem, direction) {
+      if (items.length === 0) {
+        return null;
+      }
+
+      const currentIndex = items.indexOf(currentItem);
+      if (currentIndex === -1) {
+        return null;
+      }
+
+      const nextIndex = (currentIndex + direction + items.length) %% items.length;
+      return items[nextIndex];
+    }
+
+    function getPinnedNavigationItems() {
+      if (state.pinnedFeatureType === "block") {
+        return getOrderedBlockFeatureIds();
+      }
+
+      if (state.pinnedFeatureType === "snp") {
+        return getOrderedSnpFeatureIds();
+      }
+
+      return [];
+    }
+
+    function pinNeighborFeature(direction) {
+      if (!state.pinnedFeatureId || !state.pinnedFeatureType) {
+        return;
+      }
+
+      const items = getPinnedNavigationItems();
+      const nextFeatureId = getWrappedNeighbor(
+        items,
+        state.pinnedFeatureId,
+        direction
+      );
+
+      if (!nextFeatureId) {
+        return;
+      }
+
+      setPinnedFeature(state.pinnedFeatureType, nextFeatureId);
     }
 
     function escapeHtml(text) {
@@ -816,6 +916,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function applyActiveDisplay() {
       hideAllHighlights();
+      updateFeatureNavigationButtons();
 
       const displayed = getDisplayedFeature();
       if (!displayed) {
@@ -874,6 +975,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           clearPinnedFeature();
         });
       }
+    }
+
+    function updateFeatureNavigationButtons() {
+      const previousButton = document.getElementById("feature-prev");
+      const nextButton = document.getElementById("feature-next");
+
+      if (!previousButton || !nextButton) {
+        return;
+      }
+
+      const hasPinnedFeature = Boolean(state.pinnedFeatureId && state.pinnedFeatureType);
+
+      previousButton.classList.toggle("hidden", !hasPinnedFeature);
+      nextButton.classList.toggle("hidden", !hasPinnedFeature);
+
+      if (!hasPinnedFeature) {
+        return;
+      }
+
+      previousButton.textContent = "Previous";
+      nextButton.textContent = "Next";
     }
 
     function renderBlockSidebar(featureId, isPinned) {
@@ -2553,6 +2675,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       normalizeScrollX();
       redrawStage();
       redrawAlignmentViewer();
+    });
+
+    document.getElementById("feature-prev").addEventListener("click", () => {
+      pinNeighborFeature(-1);
+    });
+
+    document.getElementById("feature-next").addEventListener("click", () => {
+      pinNeighborFeature(1);
     });
 
     document.getElementById("pan-left").addEventListener("click", () => {
