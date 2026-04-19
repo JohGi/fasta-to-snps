@@ -57,6 +57,7 @@ class SampleData:
 
     sample: str
     zone_length: int
+    zone_start_in_source_seq: int = 1
     blocks: list[BlockFeature] = field(factory=list)
     snps: list[SnpFeature] = field(factory=list)
 
@@ -110,3 +111,26 @@ class BlockAlignment:
     def to_payload(self) -> dict[str, str]:
         """Return the alignment payload indexed by sample name."""
         return self.sequences_by_sample
+
+
+@define(frozen=True)
+class GffGeneFeature:
+    """Store one GFF gene feature projected into the displayed zone."""
+
+    sample: str
+    track_name: str
+    gene_id: str
+    source_seq_id: str
+    start_in_source_seq: int
+    end_in_source_seq: int
+    start_in_zone: int
+    end_in_zone: int
+    strand: str | None = None
+
+@define(frozen=True)
+class GffTrack:
+    """Store projected GFF gene features for one sample track."""
+
+    sample: str
+    track_name: str
+    features: list[GffGeneFeature]

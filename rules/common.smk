@@ -143,6 +143,54 @@ def get_pair_sample_b(wildcards) -> str:
     _sample_a, sample_b = split_pair_id(wildcards.pair_id)
     return sample_b
 
+
+def get_gff_tracks(config, sample_names):
+    """Return configured GFF tracks after validating their structure."""
+    gff_tracks = config.get("gff_tracks", {})
+
+    if gff_tracks is None:
+        return {}
+
+    if not isinstance(gff_tracks, dict):
+        raise ValueError("Config key 'gff_tracks' must be a dictionary.")
+
+    unknown_samples = set(gff_tracks) - set(sample_names)
+    if unknown_samples:
+        raise ValueError(
+            "Unknown samples in gff_tracks: "
+            + ", ".join(sorted(unknown_samples))
+        )
+
+    for sample_name, sample_tracks in gff_tracks.items():
+        if not isinstance(sample_tracks, dict):
+            raise ValueError(
+                f"Config key 'gff_tracks.{sample_name}' must be a dictionary."
+            )
+
+        for track_name, gff_path in sample_tracks.items():
+            if not isinstance(track_name, str):
+                raise ValueError(
+                    f"Track names in gff_tracks.{sample_name} must be strings."
+                )
+
+            if not isinstance(gff_path, str):
+                raise ValueError(
+                    f"GFF path for gff_tracks.{sample_name}.{track_name} "
+                    "must be a string."
+                )
+
+    return gff_tracks
+
+
+def get_gff_track_files(gff_tracks):
+    """Return all configured GFF track files."""
+    return [
+        gff_path
+        for sample_tracks in gff_tracks.values()
+        for gff_path in sample_tracks.values()
+    ]
+
+
 def get_split_block_dir(_wildcards=None) -> Path:
     """Return the checkpoint output directory containing per-block FASTA files."""
     return Path(checkpoints.split_block_fastas.get().output[0])
@@ -186,14 +234,10 @@ def get_unmasked_chunk_list(wildcards) -> Path:
     """Return the chunk list for one unmasked alignment chunk."""
     return MASK_CHUNK_DIR / f"{wildcards.chunk_id}.list"
 
+
 def get_align_chunk_sentinels(_wildcards=None) -> list[Path]:
     """Return all alignment chunk completion markers after checkpoint completion."""
     return [ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
-
-
-# def get_unmasked_align_chunk_sentinels(_wildcards=None) -> list[Path]:
-#     """Return all unmasked alignment chunk completion markers after checkpoint completion."""
-#     return [UNMASKED_ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
 
 
 def get_distmat_chunk_sentinels(_wildcards=None) -> list[Path]:
@@ -303,6 +347,9 @@ REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
 MASHTREE_MATRIX = MASH_DISTANCES_DIR / "mashtree.matrix.tsv"
 MASHTREE_TREE = MASH_DISTANCES_DIR / "mashtree.dnd"
 MASKED_BLOCK_N_STATS_TSV = BLOCK_STATS_DIR / "masked_block_n_stats.tsv"
+GFF_TRACKS = get_gff_tracks(config, SAMPLE_NAMES)
+GFF_TRACK_FILES = get_gff_track_files(GFF_TRACKS)
+GFF_TRACKS_JSON = REGION_TRACK_DIR / "gff_tracks.json"
 
 NB_SAMPLES = len(SAMPLES)
 te_lib_value = config.get("repeat_masking", {}).get("te_lib", "")

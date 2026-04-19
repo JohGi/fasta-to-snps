@@ -18,7 +18,10 @@ from .constants import (
     PANEL_GAP,
     PANEL_HEIGHT,
     PIN_HIGHLIGHT_COLOR,
+    RESIZER_WIDTH,
     RIGHT_MARGIN,
+    SIDEBAR_MAX_WIDTH_RATIO,
+    SIDEBAR_MIN_WIDTH,
     SNP_COLOR,
     SNP_HEIGHT,
     SNP_HIGHLIGHT_MIN_WIDTH_PX,
@@ -32,11 +35,16 @@ from .constants import (
     VIEWER_MIN_WIDTH,
     VIEWER_TOP_UI_HEIGHT,
     ZOOM_STEPS,
-    RESIZER_WIDTH,
-    SIDEBAR_MAX_WIDTH_RATIO,
-    SIDEBAR_MIN_WIDTH,
 )
-from .models import BlockFeature, SampleData, SampleRecord, SnpFeature, BlockAlignment
+from .models import (
+    BlockAlignment,
+    BlockFeature,
+    GffTrack,
+    SampleData,
+    SampleRecord,
+    SnpFeature,
+)
+
 
 def build_sample_data(
     sample_records: list[SampleRecord],
@@ -56,6 +64,7 @@ def build_sample_data(
             SampleData(
                 sample=sample,
                 zone_length=fasta_lengths[sample],
+                zone_start_in_source_seq=sample_record.zone_start_in_source_seq,
                 blocks=sorted(
                     blocks_by_sample.get(sample, []),
                     key=lambda block: (
@@ -81,9 +90,11 @@ def build_region_payload(
     kimura2p_matrices: dict[str, dict[str, object]] | None = None,
     masked_block_n_stats: dict[str, dict[str, dict[str, int | float]]] | None = None,
     block_alignments: dict[str, BlockAlignment] | None = None,
+    gff_tracks_by_sample: dict[str, list[GffTrack]] | None = None,
 ) -> dict[str, object]:
     """Build the JSON payload injected into the HTML."""
     max_zone_length = max(sample.zone_length for sample in sample_data)
+    gff_tracks_by_sample = gff_tracks_by_sample or {}
 
     payload: dict[str, object] = {
         "title": "Region overview",
@@ -92,6 +103,7 @@ def build_region_payload(
             {
                 "sample": sample.sample,
                 "zone_length": sample.zone_length,
+                "zone_start_in_source_seq": sample.zone_start_in_source_seq,
                 "blocks": [
                     {
                         "feature_id": block.feature_id,
@@ -114,6 +126,27 @@ def build_region_payload(
                         "pos_in_source_seq": snp.pos_in_source_seq,
                     }
                     for snp in sample.snps
+                ],
+                "gff_tracks": [
+                    {
+                        "sample": track.sample,
+                        "track_name": track.track_name,
+                        "features": [
+                            {
+                                "sample": feature.sample,
+                                "track_name": feature.track_name,
+                                "gene_id": feature.gene_id,
+                                "source_seq_id": feature.source_seq_id,
+                                "start_in_source_seq": feature.start_in_source_seq,
+                                "end_in_source_seq": feature.end_in_source_seq,
+                                "start_in_zone": feature.start_in_zone,
+                                "end_in_zone": feature.end_in_zone,
+                                "strand": feature.strand,
+                            }
+                            for feature in track.features
+                        ],
+                    }
+                    for track in gff_tracks_by_sample.get(sample.sample, [])
                 ],
             }
             for sample in sample_data

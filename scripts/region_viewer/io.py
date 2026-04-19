@@ -9,8 +9,9 @@ import polars as pl
 import json
 import logging
 import re
+from urllib.parse import unquote
 
-from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix, BlockAlignment
+from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix, BlockAlignment, GffGeneFeature, GffTrack, SampleData
 
 LOGGER = logging.getLogger(__name__)
 
@@ -365,6 +366,238 @@ def read_block_alignments(
         )
 
     return alignments
+
+
+def read_gff_tracks_json(path: Path) -> dict[str, dict[str, Path]]:
+    """Read configured GFF tracks from a JSON file."""
+    if not path.is_file():
+        raise FileNotFoundError(f"GFF tracks JSON file not found: {path}")
+
+    with path.open(encoding="utf-8") as handle:
+        raw_tracks = json.load(handle)
+
+    if raw_tracks is None:
+        return {}
+
+    if not isinstance(raw_tracks, dict):
+        raise ValueError("GFF tracks JSON content must be a dictionary.")
+
+    gff_tracks: dict[str, dict[str, Path]] = {}
+
+    for sample_name, sample_tracks in raw_tracks.items():
+        if not isinstance(sample_name, str):
+            raise ValueError("GFF track sample names must be strings.")
+
+        if not isinstance(sample_tracks, dict):
+            raise ValueError(
+                f"GFF tracks for sample {sample_name!r} must be a dictionary."
+            )
+
+        gff_tracks[sample_name] = {}
+
+        for track_name, gff_path in sample_tracks.items():
+            if not isinstance(track_name, str):
+                raise ValueError(
+                    f"GFF track names for sample {sample_name!r} must be strings."
+                )
+
+            if not isinstance(gff_path, str):
+                raise ValueError(
+                    f"GFF path for {sample_name}.{track_name} must be a string."
+                )
+
+            gff_tracks[sample_name][track_name] = Path(gff_path)
+
+    return gff_tracks
+
+
+def parse_gff_attributes(attributes: str) -> dict[str, str]:
+    """Parse a GFF3 attribute field into a dictionary."""
+    parsed_attributes: dict[str, str] = {}
+
+    if attributes == ".":
+        return parsed_attributes
+
+    for item in attributes.split(";"):
+        if not item:
+            continue
+
+        if "=" not in item:
+            parsed_attributes[unquote(item)] = ""
+            continue
+
+        key, value = item.split("=", 1)
+        parsed_attributes[unquote(key)] = unquote(value)
+
+    return parsed_attributes
+
+
+def get_gene_id(attributes: dict[str, str], fallback_id: str) -> str:
+    """Return the best available gene identifier from GFF attributes."""
+    for key in ("ID", "Name", "gene_id", "locus_tag"):
+        value = attributes.get(key)
+
+        if value:
+            return value
+
+    return fallback_id
+
+
+def overlaps_zone(
+    feature_start: int,
+    feature_end: int,
+    zone_start: int,
+    zone_end: int,
+) -> bool:
+    """Return whether a source-sequence feature overlaps a source-sequence zone."""
+    return feature_end >= zone_start and feature_start <= zone_end
+
+
+def project_source_interval_to_zone(
+    source_start: int,
+    source_end: int,
+    zone_start: int,
+    zone_length: int,
+) -> tuple[int, int]:
+    """Project and clip a source-sequence interval into zone coordinates."""
+    raw_start_in_zone = source_start - zone_start + 1
+    raw_end_in_zone = source_end - zone_start + 1
+
+    clipped_start_in_zone = max(1, raw_start_in_zone)
+    clipped_end_in_zone = min(zone_length, raw_end_in_zone)
+
+    return clipped_start_in_zone, clipped_end_in_zone
+
+
+def read_projected_gff_gene_features(
+    path: Path,
+    sample: str,
+    track_name: str,
+    zone_start_in_source_seq: int,
+    zone_length: int,
+) -> GffTrack:
+    """Read one GFF file and project gene features into zone coordinates."""
+    if not path.is_file():
+        raise FileNotFoundError(f"GFF file not found: {path}")
+
+    zone_end_in_source_seq = zone_start_in_source_seq + zone_length - 1
+    source_seq_ids: set[str] = set()
+    features: list[GffGeneFeature] = []
+
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            fields = stripped.split("\t")
+            if len(fields) != 9:
+                raise ValueError(
+                    f"Invalid GFF line in {path} at line {line_number}: "
+                    f"expected 9 columns, got {len(fields)}."
+                )
+
+            (
+                source_seq_id,
+                _source,
+                feature_type,
+                start,
+                end,
+                _score,
+                strand,
+                _phase,
+                attributes,
+            ) = fields
+
+            source_seq_ids.add(source_seq_id)
+
+            if feature_type != "gene":
+                continue
+
+            start_in_source_seq = int(start)
+            end_in_source_seq = int(end)
+
+            if start_in_source_seq > end_in_source_seq:
+                raise ValueError(
+                    f"Invalid gene coordinates in {path} at line {line_number}: "
+                    f"start {start_in_source_seq} is greater than end {end_in_source_seq}."
+                )
+
+            if not overlaps_zone(
+                feature_start=start_in_source_seq,
+                feature_end=end_in_source_seq,
+                zone_start=zone_start_in_source_seq,
+                zone_end=zone_end_in_source_seq,
+            ):
+                continue
+
+            start_in_zone, end_in_zone = project_source_interval_to_zone(
+                source_start=start_in_source_seq,
+                source_end=end_in_source_seq,
+                zone_start=zone_start_in_source_seq,
+                zone_length=zone_length,
+            )
+
+            parsed_attributes = parse_gff_attributes(attributes)
+            fallback_id = f"{sample}_{track_name}_gene_{line_number}"
+
+            features.append(
+                GffGeneFeature(
+                    sample=sample,
+                    track_name=track_name,
+                    gene_id=get_gene_id(parsed_attributes, fallback_id),
+                    source_seq_id=source_seq_id,
+                    start_in_source_seq=start_in_source_seq,
+                    end_in_source_seq=end_in_source_seq,
+                    start_in_zone=start_in_zone,
+                    end_in_zone=end_in_zone,
+                    strand=None if strand == "." else strand,
+                )
+            )
+
+    if len(source_seq_ids) > 1:
+        raise ValueError(
+            f"GFF file must contain a single sequence ID, but {path} contains: "
+            + ", ".join(sorted(source_seq_ids))
+        )
+
+    return GffTrack(
+        sample=sample,
+        track_name=track_name,
+        features=features,
+    )
+
+
+def read_gff_gene_tracks(
+    gff_tracks: dict[str, dict[str, Path]],
+    sample_data: list[SampleData],
+) -> dict[str, list[GffTrack]]:
+    """Read and project configured GFF gene tracks by sample."""
+    samples_by_name = {sample.sample: sample for sample in sample_data}
+    projected_tracks: dict[str, list[GffTrack]] = {
+        sample.sample: []
+        for sample in sample_data
+    }
+
+    for sample_name, sample_tracks in gff_tracks.items():
+        if sample_name not in samples_by_name:
+            raise ValueError(f"Unknown sample in GFF tracks JSON: {sample_name}")
+
+        sample = samples_by_name[sample_name]
+
+        for track_name, gff_path in sample_tracks.items():
+            projected_tracks[sample_name].append(
+                read_projected_gff_gene_features(
+                    path=gff_path,
+                    sample=sample_name,
+                    track_name=track_name,
+                    zone_start_in_source_seq=sample.zone_start_in_source_seq,
+                    zone_length=sample.zone_length,
+                )
+            )
+
+    return projected_tracks
 
 
 def write_html(html: str, output_path: Path) -> None:

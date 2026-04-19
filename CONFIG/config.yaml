@@ -27,3 +27,12 @@ batching:
 
 visualization:
   dotplot_pivot: ""
+
+gff_tracks:
+  Belalur:
+    all: "dev/integration_case_builder/dataset/gffs/Belalur_all.gff"
+    LRR: "dev/integration_case_builder/dataset/gffs/Belalur_LRR.gff"
+  Dic2:
+    all: "dev/integration_case_builder/dataset/gffs/Dic2_all.gff"
+  Soldur:
+    wak: "dev/integration_case_builder/dataset/gffs/Soldur_wak.gff"

@@ -458,6 +458,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       trackInset: 8
     };
 
+    const REGION_VIEWER = {
+      axisToFirstSampleGap: 14,
+      samplesToLegendGap: 10
+    };
+
     const ALIGNMENT = {
       leftMargin: 120,
       topMargin: 28,
@@ -473,6 +478,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       scrollbarBottomPadding: 8,
       scrollbarMinThumbWidth: 36,
       panFraction: 0.1
+    };
+
+    const GFF_TRACK = {
+      height: 12,
+      gap: 5,
+      topGap: 8,
+      labelFontSize: 11,
+      minGeneWidthPx: 2,
+      colors: [
+        "#4e79a7",
+        "#f28e2b",
+        "#59a14f",
+        "#e15759",
+        "#76b7b2",
+        "#edc948",
+        "#b07aa1",
+        "#ff9da7",
+        "#9c755f",
+        "#bab0ab"
+      ]
+    };
+
+    const GFF_LEGEND = {
+      height: 22,
+      dotRadius: 4,
+      fontSize: 11,
+      itemGap: 16,
+      dotTextGap: 6,
+      topPadding: 6
+    };
+
+    const SAMPLE_LABEL = {
+      x: 24,
+      rightPadding: 4,
+      fontSize: 16,
+      fontStyle: "bold",
+      minLeftMargin: 80
     };
 
     const state = {
@@ -639,6 +681,149 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function getSampleOrder() {
       return REGION_DATA.samples.map(sample => sample.sample);
+    }
+
+    function estimateTextWidth(text, fontSize) {
+      return String(text).length * fontSize * 0.62;
+    }
+
+    function getLongestSampleLabelWidth() {
+      return Math.max(
+        ...REGION_DATA.samples.map(sample =>
+          estimateTextWidth(sample.sample, SAMPLE_LABEL.fontSize)
+        ),
+        0
+      );
+    }
+
+    function getLeftMargin() {
+      return Math.max(
+        SAMPLE_LABEL.minLeftMargin,
+        SAMPLE_LABEL.x + getLongestSampleLabelWidth() + SAMPLE_LABEL.rightPadding
+      );
+    }
+
+    function getSampleGffTracks(sample) {
+      return sample.gff_tracks || [];
+    }
+
+    function getAllGffTrackNames() {
+      const trackNames = new Set();
+
+      for (const sample of REGION_DATA.samples) {
+        for (const track of getSampleGffTracks(sample)) {
+          trackNames.add(track.track_name);
+        }
+      }
+
+      return [...trackNames].sort();
+    }
+
+    function getGffTrackColor(trackName) {
+      const trackNames = getAllGffTrackNames();
+      const index = trackNames.indexOf(trackName);
+
+      if (index === -1) {
+        return "#9ca3af";
+      }
+
+      return GFF_TRACK.colors[index %% GFF_TRACK.colors.length];
+    }
+
+    function getSamplePanelHeight(sample) {
+      const gffTrackCount = getSampleGffTracks(sample).length;
+
+      return CONFIG.panelHeight
+        + gffTrackCount * (GFF_TRACK.height + GFF_TRACK.gap);
+    }
+
+    function getGffLegendHeight() {
+      return getAllGffTrackNames().length > 0 ? GFF_LEGEND.height : 0;
+    }
+
+    function getMainViewerContentHeight() {
+      const sampleHeights = REGION_DATA.samples.reduce(
+        (total, sample) => total + getSamplePanelHeight(sample),
+        0
+      );
+
+      return CONFIG.viewerTopUiHeight
+        + CONFIG.topMargin
+        + REGION_VIEWER.axisToFirstSampleGap
+        + sampleHeights
+        + Math.max(0, REGION_DATA.samples.length - 1) * CONFIG.panelGap
+        + REGION_VIEWER.samplesToLegendGap
+        + getGffLegendHeight()
+        + CONFIG.bottomMargin
+        + SCROLLBAR.height
+        + SCROLLBAR.bottomPadding;
+    }
+
+    function getSamplesBottomY() {
+      const sampleHeights = REGION_DATA.samples.reduce(
+        (total, sample) => total + getSamplePanelHeight(sample),
+        0
+      );
+
+      return CONFIG.viewerTopUiHeight
+        + CONFIG.topMargin
+        + REGION_VIEWER.axisToFirstSampleGap
+        + sampleHeights
+        + Math.max(0, REGION_DATA.samples.length - 1) * CONFIG.panelGap;
+    }
+
+    function getGffLegendY() {
+      return getSamplesBottomY() + REGION_VIEWER.samplesToLegendGap;
+    }
+
+    function drawGffTrackLegend(layer) {
+      const trackNames = getAllGffTrackNames();
+
+      if (trackNames.length === 0) {
+        return;
+      }
+
+      let x = getLeftMargin();
+      const y = getGffLegendY() + GFF_LEGEND.topPadding;
+
+      layer.add(new Konva.Text({
+        x,
+        y,
+        text: "Gene tracks:",
+        fontSize: GFF_LEGEND.fontSize,
+        fontStyle: "bold",
+        fill: "#374151",
+        listening: false
+      }));
+
+      x += estimateTextWidth("Gene tracks:", GFF_LEGEND.fontSize) + 14;
+
+      for (const trackName of trackNames) {
+        const color = getGffTrackColor(trackName);
+        const textWidth = estimateTextWidth(trackName, GFF_LEGEND.fontSize);
+
+        layer.add(new Konva.Circle({
+          x: x + GFF_LEGEND.dotRadius,
+          y: y + GFF_LEGEND.fontSize / 2,
+          radius: GFF_LEGEND.dotRadius,
+          fill: color,
+          listening: false
+        }));
+
+        layer.add(new Konva.Text({
+          x: x + GFF_LEGEND.dotRadius * 2 + GFF_LEGEND.dotTextGap,
+          y,
+          text: trackName,
+          fontSize: GFF_LEGEND.fontSize,
+          fill: "#4b5563",
+          listening: false
+        }));
+
+        x += GFF_LEGEND.dotRadius * 2
+          + GFF_LEGEND.dotTextGap
+          + textWidth
+          + GFF_LEGEND.itemGap;
+      }
     }
 
     function formatDistanceValue(value) {
@@ -1179,7 +1364,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function getViewportTrackWidth() {
-      return getStageWidth() - CONFIG.leftMargin - CONFIG.rightMargin;
+      return getStageWidth() - getLeftMargin() - CONFIG.rightMargin;
     }
 
     function getDrawableTrackWidth() {
@@ -1264,12 +1449,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function computePanelTop(panelIndex) {
-      return CONFIG.viewerTopUiHeight + CONFIG.topMargin
-        + panelIndex * (CONFIG.panelHeight + CONFIG.panelGap);
+      let panelTop = CONFIG.viewerTopUiHeight
+        + CONFIG.topMargin
+        + REGION_VIEWER.axisToFirstSampleGap;
+
+      for (let index = 0; index < panelIndex; index += 1) {
+        panelTop += getSamplePanelHeight(REGION_DATA.samples[index]) + CONFIG.panelGap;
+      }
+
+      return panelTop;
     }
 
     function getScrollbarY() {
-      return contentHeight - SCROLLBAR.bottomPadding - SCROLLBAR.height;
+      return getMainViewerContentHeight() - SCROLLBAR.bottomPadding - SCROLLBAR.height;
     }
 
     function getWorldToScreenScale() {
@@ -1285,7 +1477,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function worldXToScreenX(position) {
       const visibleStart = getVisibleStartBp();
-      return CONFIG.leftMargin + (position - visibleStart) * getWorldToScreenScale();
+      return getLeftMargin() + (position - visibleStart) * getWorldToScreenScale();
     }
 
     function formatNumber(value, decimals = 0) {
@@ -1363,8 +1555,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function drawGlobalAxis(layer) {
-      const x0 = CONFIG.leftMargin;
-      const x1 = CONFIG.leftMargin + getDrawableTrackWidth();
+      const x0 = getLeftMargin();
+      const x1 = getLeftMargin() + getDrawableTrackWidth();
       const axisY = CONFIG.viewerTopUiHeight + 24;
 
       const axis = new Konva.Line({
@@ -1414,12 +1606,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function drawSampleLabel(layer, panelTop, sampleName) {
       const label = new Konva.Text({
-        x: 10,
+        x: SAMPLE_LABEL.x,
         y: panelTop + CONFIG.trackY + 4,
-        width: CONFIG.leftMargin - 20,
+        width: getLeftMargin() - SAMPLE_LABEL.x - SAMPLE_LABEL.rightPadding,
         text: sampleName,
-        fontSize: 16,
-        fontStyle: "bold",
+        fontSize: SAMPLE_LABEL.fontSize,
+        fontStyle: SAMPLE_LABEL.fontStyle,
         fill: "#222222",
         listening: false
       });
@@ -1479,6 +1671,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
     }
 
+    function drawSampleTrackBackground(layer, sample, panelTop) {
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      if (!intersectsRange(1, sample.zone_length, visibleStart, visibleEnd)) {
+        return;
+      }
+
+      const clippedStart = Math.max(1, visibleStart);
+      const clippedEnd = Math.min(sample.zone_length, visibleEnd);
+
+      if (clippedEnd < clippedStart) {
+        return;
+      }
+
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
+      const y = panelTop + CONFIG.trackY;
+
+      layer.add(new Konva.Rect({
+        x: x0,
+        y,
+        width: Math.max(1, x1 - x0),
+        height: CONFIG.trackHeight,
+        fill: "#ffffff",
+        strokeWidth: 0,
+        listening: false
+      }));
+    }
+    
     function getFeatureY(panelTop) {
       return panelTop + CONFIG.trackY + 1;
     }
@@ -1603,7 +1825,105 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
     }
 
+    function getGffTrackY(panelTop, trackIndex) {
+      return panelTop
+        + CONFIG.trackY
+        + CONFIG.trackHeight
+        + GFF_TRACK.topGap
+        + trackIndex * (GFF_TRACK.height + GFF_TRACK.gap);
+    }
+
+    function drawGffTrackBaseline(layer, sample, panelTop, trackIndex) {
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      if (!intersectsRange(1, sample.zone_length, visibleStart, visibleEnd)) {
+        return;
+      }
+
+      const clippedStart = Math.max(1, visibleStart);
+      const clippedEnd = Math.min(sample.zone_length, visibleEnd);
+
+      if (clippedEnd < clippedStart) {
+        return;
+      }
+
+      const y = getGffTrackY(panelTop, trackIndex) + GFF_TRACK.height / 2;
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
+
+      layer.add(new Konva.Line({
+        points: [x0, y, x1, y],
+        stroke: "#e5e7eb",
+        strokeWidth: 1,
+        listening: false
+      }));
+    }
+
+    function drawGffGeneFeature(layer, gene, panelTop, trackIndex, color) {
+      const visibleStart = getVisibleStartBp();
+      const visibleEnd = getVisibleEndBp();
+
+      if (!intersectsRange(gene.start_in_zone, gene.end_in_zone, visibleStart, visibleEnd)) {
+        return;
+      }
+
+      const clippedStart = Math.max(gene.start_in_zone, visibleStart);
+      const clippedEnd = Math.min(gene.end_in_zone, visibleEnd);
+
+      if (clippedEnd < clippedStart) {
+        return;
+      }
+
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
+      const y = getGffTrackY(panelTop, trackIndex);
+
+      layer.add(new Konva.Rect({
+        x: x0,
+        y,
+        width: Math.max(GFF_TRACK.minGeneWidthPx, x1 - x0),
+        height: GFF_TRACK.height,
+        fill: color,
+        opacity: 0.85,
+        cornerRadius: 2,
+        listening: false
+      }));
+    }
+
+    function drawGffTracks(layer, sample, panelTop) {
+      const tracks = getSampleGffTracks(sample);
+
+      tracks.forEach((track, trackIndex) => {
+        const color = getGffTrackColor(track.track_name);
+
+        drawGffTrackBaseline(layer, sample, panelTop, trackIndex);
+
+        for (const gene of track.features || []) {
+          drawGffGeneFeature(layer, gene, panelTop, trackIndex, color);
+        }
+      });
+    }
+
+    function drawSamplePanelBackground(layer, sample, panelTop) {
+      const backgroundX = 4;
+      const backgroundRight = getLeftMargin() + getDrawableTrackWidth() + 8;
+
+      layer.add(new Konva.Rect({
+        x: backgroundX,
+        y: panelTop - 6,
+        width: Math.max(1, backgroundRight - backgroundX),
+        height: getSamplePanelHeight(sample) + 4,
+        fill: "#f7f8fa",
+        stroke: "#e9ecef",
+        strokeWidth: 1,
+        cornerRadius: 8,
+        listening: false
+      }));
+    }
+
     function drawSample(
+      backgroundLayer,
       blockLayer,
       blockHighlightLayer,
       snpLayer,
@@ -1616,9 +1936,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const panelTop = computePanelTop(panelIndex);
       const visibleStart = getVisibleStartBp();
       const visibleEnd = getVisibleEndBp();
+      drawSamplePanelBackground(backgroundLayer, sample, panelTop);
 
       drawSampleLabel(blockLayer, panelTop, sample.sample);
+      drawSampleTrackBackground(blockLayer, sample, panelTop);
       drawSampleOutline(zoneOutlineLayer, sample, panelTop);
+      drawGffTracks(blockLayer, sample, panelTop);
 
       for (const block of sample.blocks) {
         if (!intersectsRange(
@@ -1661,7 +1984,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function getScrollbarMetrics() {
-      const trackX = CONFIG.leftMargin + SCROLLBAR.trackInset;
+      const trackX = getLeftMargin() + SCROLLBAR.trackInset;
       const trackWidth = Math.max(1, getDrawableTrackWidth() - 2 * SCROLLBAR.trackInset);
       const trackY = getScrollbarY();
       const contentWidth = getContentWidth();
@@ -1804,18 +2127,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       setVisibleStartBp(targetVisibleStart);
     }
 
-    const contentHeight = CONFIG.viewerTopUiHeight
-      + CONFIG.topMargin
-      + REGION_DATA.samples.length * CONFIG.panelHeight
-      + Math.max(0, REGION_DATA.samples.length - 1) * CONFIG.panelGap
-      + CONFIG.bottomMargin
-      + SCROLLBAR.height
-      + SCROLLBAR.bottomPadding;
-
     const stage = new Konva.Stage({
       container: "viewer",
       width: 1,
-      height: contentHeight
+      height: getMainViewerContentHeight()
     });
 
     const backgroundLayer = new Konva.Layer();
@@ -1850,7 +2165,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function redrawStage() {
       stage.width(getStageWidth());
-      stage.height(contentHeight);
+      stage.height(getMainViewerContentHeight());
 
       backgroundLayer.destroyChildren();
       blockLayer.destroyChildren();
@@ -1866,7 +2181,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         x: 0,
         y: 0,
         width: getStageWidth(),
-        height: contentHeight,
+        height: getMainViewerContentHeight(),
         fill: "white",
         listening: false
       }));
@@ -1875,6 +2190,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       REGION_DATA.samples.forEach((sample, index) => {
         drawSample(
+          backgroundLayer,
           blockLayer,
           blockHighlightLayer,
           snpLayer,
@@ -1886,6 +2202,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         );
       });
 
+      drawGffTrackLegend(blockLayer);
       drawScrollbar(interactionLayer);
       reapplyDisplayIfVisible();
       stage.draw();
