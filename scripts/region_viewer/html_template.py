@@ -182,19 +182,32 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     .alignment-toolbar {
       display: flex;
+      justify-content: space-between;
+      align-items: center;
       gap: 8px;
-      flex: 0 0 auto;
+      flex: 1 1 auto;
+    }
+
+    .alignment-toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alignment-toolbar .alignment-snp-nav-button {
+      min-width: 104px;
     }
 
     .alignment-toolbar button {
-      padding: 6px 10px;
+      min-width: 36px;
+      padding: 5px 9px;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.94);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.88);
       color: var(--text);
       cursor: pointer;
-      font-size: 13px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      font-size: 12px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     }
 
     .alignment-toolbar button:hover {
@@ -400,18 +413,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
           <div id="viewer" class="viewer" tabindex="0"></div>
         </div>
-                <section class="alignment-panel">
+                <section id="alignment-panel" class="alignment-panel hidden">
           <div class="alignment-header">
             <div>
               <h2>Block alignment</h2>
               <p id="alignment-subtitle" class="hint">Hover or pin a block to display its alignment.</p>
             </div>
             <div class="alignment-toolbar">
-              <button id="alignment-pan-left" type="button">←</button>
-              <button id="alignment-pan-right" type="button">→</button>
-              <button id="alignment-zoom-out" type="button">−</button>
-              <button id="alignment-zoom-in" type="button">+</button>
-              <button id="alignment-zoom-reset" type="button">Reset</button>
+              <div class="alignment-toolbar-group">
+                <button id="alignment-snp-prev" class="alignment-snp-nav-button" type="button">Previous SNP</button>
+                <button id="alignment-snp-next" class="alignment-snp-nav-button" type="button">Next SNP</button>
+              </div>
+              <div class="alignment-toolbar-group">
+                <button id="alignment-pan-left" type="button">←</button>
+                <button id="alignment-pan-right" type="button">→</button>
+                <button id="alignment-zoom-out" type="button">−</button>
+                <button id="alignment-zoom-in" type="button">+</button>
+                <button id="alignment-zoom-reset" type="button">Reset</button>
+              </div>
             </div>
           </div>
           <div id="alignment-viewer" class="alignment-stage-container"></div>
@@ -478,7 +497,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       isDraggingAlignmentScrollbar: false,
       alignmentDragStartPointerX: 0,
       alignmentDragStartScrollX: 0,
-      alignmentScrollbarDragOffsetX: 0
+      alignmentScrollbarDragOffsetX: 0,
+      alignmentFocusedSnpColumn: null
     };
 
     function buildFeatureGroups(data) {
@@ -1879,6 +1899,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return document.getElementById("alignment-subtitle");
     }
 
+    function getAlignmentPanel() {
+      return document.getElementById("alignment-panel");
+    }
+
     function getBlockIdFromFeature(featureType, featureId) {
       if (featureType !== "block") {
         return null;
@@ -1892,13 +1916,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return String(entries[0].info.block_id);
     }
 
-    function getActiveAlignmentBlockId() {
+    function getFirstFeatureInfo(featureId) {
+      const entries = state.featureGroups.get(featureId) || [];
+
+      if (entries.length === 0) {
+        return null;
+      }
+
+      return entries[0].info;
+    }
+
+    function getActiveAlignmentTarget() {
       if (state.hoveredFeatureId && state.hoveredFeatureType === "block") {
-        return getBlockIdFromFeature(state.hoveredFeatureType, state.hoveredFeatureId);
+        return {
+          blockId: getBlockIdFromFeature("block", state.hoveredFeatureId),
+          focusColumn: null
+        };
+      }
+
+      if (state.pinnedFeatureId && state.pinnedFeatureType === "snp") {
+        const info = getFirstFeatureInfo(state.pinnedFeatureId);
+
+        if (!info) {
+          return null;
+        }
+
+        return {
+          blockId: String(info.block_id),
+          focusColumn: Number(info.aln_pos) - 1
+        };
       }
 
       if (state.pinnedFeatureId && state.pinnedFeatureType === "block") {
-        return getBlockIdFromFeature(state.pinnedFeatureType, state.pinnedFeatureId);
+        return {
+          blockId: getBlockIdFromFeature("block", state.pinnedFeatureId),
+          focusColumn: null
+        };
       }
 
       return null;
@@ -1982,6 +2035,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       );
     }
 
+    function centerAlignmentOnColumn(columnIndex, alignmentLength) {
+      if (
+        columnIndex === null
+        || columnIndex === undefined
+        || Number.isNaN(Number(columnIndex))
+        || alignmentLength === 0
+      ) {
+        return;
+      }
+
+      const charWidth = getAlignmentCharWidth();
+      const targetCenterX = columnIndex * charWidth + charWidth / 2;
+
+      state.alignmentScrollX = clampAlignmentScrollX(
+        targetCenterX - getAlignmentViewportWidth() / 2,
+        alignmentLength
+      );
+    }
+
     function getVisibleAlignmentColumnRange(alignmentLength) {
       const charWidth = getAlignmentCharWidth();
       const firstColumn = Math.max(0, Math.floor(state.alignmentScrollX / charWidth));
@@ -2042,7 +2114,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return "#111827";
     }
 
-    function drawAlignmentAxis(layer, alignmentLength) {
+    function formatAlignmentAxisValue(value) {
+      if (value <= CONFIG.bpToKbThresholdBp) {
+        return `${formatNumber(value, 0)} bp`;
+      }
+
+      if (value <= CONFIG.kbToMbThresholdBp) {
+        return `${formatNumber(value / 1000, 1)} kb`;
+      }
+
+      return `${formatNumber(value / 1000000, 3)} Mb`;
+    }
+
+    function drawAlignmentAxis(layer, alignmentLength, snpColumns) {
       const y = ALIGNMENT.topMargin;
       const x0 = ALIGNMENT.leftMargin;
       const x1 = ALIGNMENT.leftMargin + getAlignmentViewportWidth();
@@ -2072,12 +2156,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }));
 
         layer.add(new Konva.Text({
-          x: x - 28,
+          x: x - 34,
           y: y - 18,
-          width: 56,
-          text: String(value),
+          width: 68,
+          text: formatAlignmentAxisValue(value),
           fontSize: 10,
           fill: "#555555",
+          align: "center",
+          listening: false
+        }));
+      }
+      const visibleSnpColumns = [...snpColumns].filter(
+        columnIndex => columnIndex >= range.firstColumn && columnIndex < range.lastColumn
+      );
+
+      for (const columnIndex of visibleSnpColumns) {
+        const x = alignmentColumnCenterToX(columnIndex);
+
+        layer.add(new Konva.Text({
+          x: x - 6,
+          y: y + 12,
+          width: 12,
+          text: "*",
+          fontSize: 13,
+          fontStyle: "bold",
+          fill: "#111827",
           align: "center",
           listening: false
         }));
@@ -2105,6 +2208,113 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       return snpColumns;
+    }
+
+    function getBlockSnpColumns(blockId) {
+      const columns = [];
+
+      if (!blockId) {
+        return columns;
+      }
+
+      for (const sample of REGION_DATA.samples) {
+        for (const snp of sample.snps) {
+          if (String(snp.block_id) !== String(blockId)) {
+            continue;
+          }
+
+          const alnPos = Number(snp.aln_pos);
+          if (!Number.isNaN(alnPos) && alnPos >= 1) {
+            columns.push(alnPos - 1);
+          }
+        }
+      }
+
+      return [...new Set(columns)].sort((left, right) => left - right);
+    }
+
+    function getBlockSnpNavigationItems(blockId) {
+      const itemsByFeatureId = new Map();
+
+      if (!blockId) {
+        return [];
+      }
+
+      for (const sample of REGION_DATA.samples) {
+        for (const snp of sample.snps) {
+          if (String(snp.block_id) !== String(blockId)) {
+            continue;
+          }
+
+          const alnPos = Number(snp.aln_pos);
+          if (Number.isNaN(alnPos) || alnPos < 1) {
+            continue;
+          }
+
+          if (!itemsByFeatureId.has(snp.feature_id)) {
+            itemsByFeatureId.set(snp.feature_id, {
+              featureId: snp.feature_id,
+              columnIndex: alnPos - 1
+            });
+          }
+        }
+      }
+
+      return [...itemsByFeatureId.values()]
+        .sort((left, right) => left.columnIndex - right.columnIndex);
+    }
+
+    function getCurrentAlignmentCenterColumn() {
+      return (state.alignmentScrollX + getAlignmentViewportWidth() / 2)
+        / getAlignmentCharWidth();
+    }
+
+    function getNearestSnpColumnIndex(snpColumns) {
+      if (snpColumns.length === 0) {
+        return -1;
+      }
+
+      const currentColumn = state.alignmentFocusedSnpColumn !== null
+        ? state.alignmentFocusedSnpColumn
+        : getCurrentAlignmentCenterColumn();
+
+      let bestIndex = 0;
+      let bestDistance = Math.abs(snpColumns[0] - currentColumn);
+
+      for (let index = 1; index < snpColumns.length; index += 1) {
+        const distance = Math.abs(snpColumns[index] - currentColumn);
+
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      }
+
+      return bestIndex;
+    }
+
+    function focusNeighborAlignmentSnp(direction) {
+      const blockId = state.activeAlignmentBlockId;
+      const alignmentData = getAlignmentData(blockId);
+      const alignmentLength = getAlignmentLength(alignmentData);
+      const snpItems = getBlockSnpNavigationItems(blockId);
+
+      if (alignmentLength === 0 || snpItems.length === 0) {
+        return;
+      }
+
+      const snpColumns = snpItems.map(item => item.columnIndex);
+      const currentIndex = getNearestSnpColumnIndex(snpColumns);
+
+      if (currentIndex === -1) {
+        return;
+      }
+
+      const nextIndex = (currentIndex + direction + snpItems.length) %% snpItems.length;
+      const nextItem = snpItems[nextIndex];
+
+      state.alignmentFocusedSnpColumn = nextItem.columnIndex;
+      setPinnedFeature("snp", nextItem.featureId);
     }
 
     function drawAlignmentRows(layer, alignmentData, sampleNames, alignmentLength, snpColumns) {
@@ -2318,15 +2528,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }));
 
       alignmentStage.draw();
+      syncSidebarHeightToViewerColumn();
     }
 
     function redrawAlignmentViewer() {
+      const panel = getAlignmentPanel();
       const blockId = state.activeAlignmentBlockId;
       const alignmentData = getAlignmentData(blockId);
 
       if (!blockId) {
-        renderAlignmentEmpty("Hover or pin a block to display its alignment.");
+        if (panel) {
+          panel.classList.add("hidden");
+        }
+        syncSidebarHeightToViewerColumn();
         return;
+      }
+
+      if (panel) {
+        panel.classList.remove("hidden");
       }
 
       if (!alignmentData) {
@@ -2367,8 +2586,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         listening: false
       }));
 
-      drawAlignmentAxis(alignmentSequenceLayer, alignmentLength);
       const snpColumns = getBlockSnpAlignmentColumns(blockId);
+      drawAlignmentAxis(alignmentSequenceLayer, alignmentLength, snpColumns);
       drawAlignmentRows(
         alignmentSequenceLayer,
         alignmentData,
@@ -2379,15 +2598,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       drawAlignmentScrollbar(alignmentInteractionLayer, alignmentLength, sampleNames.length);
 
       alignmentStage.draw();
+      syncSidebarHeightToViewerColumn();
     }
 
     function updateActiveAlignmentViewer() {
-      const nextBlockId = getActiveAlignmentBlockId();
+      const target = getActiveAlignmentTarget();
+
+      if (!target || !target.blockId) {
+        state.activeAlignmentBlockId = null;
+        state.alignmentFocusedSnpColumn = null;
+        redrawAlignmentViewer();
+        return;
+      }
+
+      const nextBlockId = target.blockId;
+      const nextFocusColumn = target.focusColumn;
 
       if (state.activeAlignmentBlockId !== nextBlockId) {
         state.activeAlignmentBlockId = nextBlockId;
         state.alignmentScrollX = 0;
         state.alignmentZoomX = 1;
+      }
+
+      state.alignmentFocusedSnpColumn = nextFocusColumn;
+
+      const alignmentData = getAlignmentData(nextBlockId);
+      const alignmentLength = getAlignmentLength(alignmentData);
+
+      if (nextFocusColumn !== null) {
+        centerAlignmentOnColumn(nextFocusColumn, alignmentLength);
       }
 
       redrawAlignmentViewer();
@@ -2555,6 +2794,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         normalizeScrollX();
         redrawStage();
+        syncSidebarHeightToViewerColumn();
       });
 
       function stopColumnResize(event) {
@@ -2573,6 +2813,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       resizer.addEventListener("pointerup", stopColumnResize);
       resizer.addEventListener("pointercancel", stopColumnResize);
+    }
+
+    function syncSidebarHeightToViewerColumn() {
+      const viewerColumn = document.getElementById("viewer-column");
+      const sidebar = document.getElementById("sidebar");
+
+      if (!viewerColumn || !sidebar) {
+        return;
+      }
+
+      const height = viewerColumn.getBoundingClientRect().height;
+      sidebar.style.height = `${height}px`;
+      sidebar.style.maxHeight = `${height}px`;
     }
 
     stage.on("pointerdown", (event) => {
@@ -2657,7 +2910,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         return;
       }
 
-      document.body.style.cursor = "grab";
+      if (state.activeAlignmentBlockId && getAlignmentData(state.activeAlignmentBlockId)) {
+        document.body.style.cursor = "grab";
+      } else {
+        document.body.style.cursor = "default";
+      }
     });
 
     alignmentStage.on("pointerup", stopAlignmentDrag);
@@ -2670,11 +2927,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     redrawStage();
     setupColumnResizer();
     redrawAlignmentViewer();
+    syncSidebarHeightToViewerColumn();
 
     window.addEventListener("resize", () => {
       normalizeScrollX();
       redrawStage();
       redrawAlignmentViewer();
+      syncSidebarHeightToViewerColumn();
     });
 
     document.getElementById("feature-prev").addEventListener("click", () => {
@@ -2717,6 +2976,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         event.preventDefault();
         moveByViewportFraction(1, 0.1);
       }
+    });
+
+    document.getElementById("alignment-snp-prev").addEventListener("click", () => {
+      focusNeighborAlignmentSnp(-1);
+    });
+
+    document.getElementById("alignment-snp-next").addEventListener("click", () => {
+      focusNeighborAlignmentSnp(1);
     });
 
     document.getElementById("alignment-pan-left").addEventListener("click", () => {
