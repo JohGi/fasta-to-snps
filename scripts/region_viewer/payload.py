@@ -36,8 +36,7 @@ from .constants import (
     SIDEBAR_MAX_WIDTH_RATIO,
     SIDEBAR_MIN_WIDTH,
 )
-from .models import BlockFeature, SampleData, SampleRecord, SnpFeature
-
+from .models import BlockFeature, SampleData, SampleRecord, SnpFeature, BlockAlignment
 
 def build_sample_data(
     sample_records: list[SampleRecord],
@@ -81,6 +80,7 @@ def build_region_payload(
     mash_matrix: dict[str, object] | None = None,
     kimura2p_matrices: dict[str, dict[str, object]] | None = None,
     masked_block_n_stats: dict[str, dict[str, dict[str, int | float]]] | None = None,
+    block_alignments: dict[str, BlockAlignment] | None = None,
 ) -> dict[str, object]:
     """Build the JSON payload injected into the HTML."""
     max_zone_length = max(sample.zone_length for sample in sample_data)
@@ -122,6 +122,10 @@ def build_region_payload(
         "mash_matrix": mash_matrix or {},
         "kimura2p_matrices": kimura2p_matrices or {},
         "masked_block_n_stats": masked_block_n_stats or {},
+        "block_alignments": {
+            block_id: alignment.to_payload()
+            for block_id, alignment in (block_alignments or {}).items()
+        },
     }
 
     return payload

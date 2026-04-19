@@ -1,3 +1,157 @@
+
+scripts/region_viewer/__init__.py
+
+scripts/region_viewer/__pycache__
+
+scripts/region_viewer/builder.py
+#!/usr/bin/env python3
+# Author: Johanna Girodolle
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from attrs import define
+
+from .html_template import build_html
+from .io import (
+    parse_kimura2p_distmat_dir,
+    parse_mash_matrix,
+    read_block_alignments,
+    read_blocks,
+    read_fasta_lengths,
+    read_masked_block_n_stats,
+    read_samples,
+    read_snps,
+    read_summary_stats,
+    write_html,
+)
+from .payload import build_region_payload, build_sample_data
+
+
+@define
+class RegionOverviewBuilder:
+    """Build the final Konva HTML from workflow outputs."""
+
+    samples_tsv_path: Path
+    block_coords_tsv_path: Path
+    snp_long_path: Path
+    fasta_dir: Path
+    summary_stats_json_path: Path
+    mash_matrix_path: Path
+    kimura2p_distmat_dir: Path
+    masked_block_n_stats_path: Path
+    masked_align_dir: Path
+    output_path: Path
+
+    def run(self) -> None:
+        """Run the full HTML generation workflow."""
+        sample_records = read_samples(self.samples_tsv_path)
+        sample_order = [record.sample for record in sample_records]
+
+        fasta_lengths = read_fasta_lengths(self.fasta_dir)
+        blocks_by_sample = read_blocks(self.block_coords_tsv_path)
+        block_ids = sorted(
+            {
+                block.block_id
+                for sample_blocks in blocks_by_sample.values()
+                for block in sample_blocks
+            }
+        )
+        block_alignments = read_block_alignments(
+            align_dir=self.masked_align_dir,
+            block_ids=block_ids,
+        )
+        snps_by_sample = read_snps(self.snp_long_path)
+
+        summary_stats = read_summary_stats(self.summary_stats_json_path)
+        mash_matrix = parse_mash_matrix(
+            path=self.mash_matrix_path,
+            sample_order=sample_order,
+        ).to_dict()
+        kimura2p_matrices = parse_kimura2p_distmat_dir(
+            distmat_dir=self.kimura2p_distmat_dir,
+            sample_order=sample_order,
+        )
+        masked_block_n_stats = read_masked_block_n_stats(
+            self.masked_block_n_stats_path
+        )
+
+        sample_data = build_sample_data(
+            sample_records=sample_records,
+            fasta_lengths=fasta_lengths,
+            blocks_by_sample=blocks_by_sample,
+            snps_by_sample=snps_by_sample,
+        )
+
+        region_data = build_region_payload(
+            sample_data=sample_data,
+            summary_stats=summary_stats,
+            mash_matrix=mash_matrix,
+            kimura2p_matrices=kimura2p_matrices,
+            masked_block_n_stats=masked_block_n_stats,
+            block_alignments=block_alignments,
+        )
+
+        html = build_html(region_data)
+        write_html(html, self.output_path)
+
+scripts/region_viewer/constants.py
+#!/usr/bin/env python3
+# Author: Johanna Girodolle
+
+"""Constants used by the region overview generator."""
+
+TRACK_HEIGHT = 28
+FEATURE_HEIGHT = TRACK_HEIGHT - 2
+SNP_HEIGHT = TRACK_HEIGHT
+TRACK_Y_OFFSET = 12
+
+PANEL_BOTTOM_SPACE = 12
+PANEL_HEIGHT = TRACK_Y_OFFSET + TRACK_HEIGHT + PANEL_BOTTOM_SPACE
+PANEL_GAP = 6
+
+VIEWER_TOP_UI_HEIGHT = 44
+
+LEFT_MARGIN = 110
+RIGHT_MARGIN = 40
+TOP_MARGIN = 30
+BOTTOM_MARGIN = 30
+END_PADDING_PX = 24
+
+SNP_LINE_WIDTH = 2
+
+VIEWER_MIN_WIDTH = 900
+SIDEBAR_WIDTH = 320
+
+# Zoom behaviour
+TARGET_VISIBLE_BP = 2_000
+ZOOM_STEPS = 16
+MAX_ZOOM_CAP = 10000
+
+# Axis behaviour
+TARGET_TICK_SPACING_PX = 100
+BP_TO_KB_THRESHOLD_BP = 10_000
+KB_TO_MB_THRESHOLD_BP = 1_000_000
+
+# Features
+BLOCK_MIN_WIDTH_PX = 1
+BLOCK_HIGHLIGHT_MIN_WIDTH_PX = 2
+SNP_MIN_WIDTH_PX = 1
+SNP_HIGHLIGHT_MIN_WIDTH_PX = 2
+
+# Colors
+BLOCK_FILL = "#d9d9d9"
+SNP_COLOR = "#d62728"
+PIN_HIGHLIGHT_COLOR = "rgb(0,120,255)"
+HOVER_HIGHLIGHT_COLOR = "#93c5fd"
+
+
+SIDEBAR_MIN_WIDTH = 260
+SIDEBAR_MAX_WIDTH_RATIO = 0.7
+RESIZER_WIDTH = 8
+
+scripts/region_viewer/html_template.py
 #!/usr/bin/env python3
 # Author: Johanna Girodolle
 
@@ -2191,7 +2345,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       const subtitle = getAlignmentSubtitle();
       if (subtitle) {
-        subtitle.textContent = `Block ${blockId} (${alignmentLength} pb)`;
+        subtitle.textContent = `Block ${blockId}, ${alignmentLength} aligned columns.`;
       }
 
       const stageHeight = getAlignmentStageHeight(sampleNames.length);
@@ -2587,4 +2741,659 @@ def build_html(region_data: dict[str, object]) -> str:
         "sidebar_min_width": SIDEBAR_MIN_WIDTH,
         "viewer_min_width": config["minWidth"],
         "resizer_width": RESIZER_WIDTH,
+    }
+
+scripts/region_viewer/io.py
+#!/usr/bin/env python3
+# Author: Johanna Girodolle
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import polars as pl
+import json
+import logging
+
+from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix, BlockAlignment
+
+LOGGER = logging.getLogger(__name__)
+
+# FLOAT_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
+
+
+
+def read_samples(path: Path) -> list[SampleRecord]:
+    """Read the samples TSV."""
+    records: list[SampleRecord] = []
+
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            fields = stripped.split()
+            if len(fields) < 2:
+                raise ValueError(
+                    f"Expected at least 2 columns in samples TSV at line {line_number}: {line.rstrip()}"
+                )
+
+            fasta_path = Path(fields[0])
+            sample = fields[1]
+            zone_start = int(fields[2]) if len(fields) > 2 else 1
+            records.append(
+                SampleRecord(
+                    fasta_path=fasta_path,
+                    sample=sample,
+                    zone_start_in_source_seq=zone_start,
+                )
+            )
+
+    if not records:
+        raise ValueError(f"Samples TSV is empty: {path}")
+
+    return records
+
+
+def read_single_fasta_length(path: Path) -> int:
+    """Read the sequence length of a single-sequence FASTA."""
+    if not path.is_file():
+        raise FileNotFoundError(f"FASTA file not found: {path}")
+
+    header_count = 0
+    sequence_chunks: list[str] = []
+
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(">"):
+                header_count += 1
+                continue
+            sequence_chunks.append(stripped)
+
+    if header_count != 1:
+        raise ValueError(f"Expected exactly one sequence in FASTA {path}, found {header_count}")
+
+    sequence = "".join(sequence_chunks)
+    if not sequence:
+        raise ValueError(f"Empty sequence in FASTA: {path}")
+
+    return len(sequence)
+
+
+def read_fasta_lengths(fasta_dir: Path) -> dict[str, int]:
+    """Read lengths from per-sample FASTA files."""
+    if not fasta_dir.is_dir():
+        raise FileNotFoundError(f"FASTA directory not found: {fasta_dir}")
+
+    lengths: dict[str, int] = {}
+    for fasta_path in sorted(fasta_dir.glob("*.fasta")):
+        lengths[fasta_path.stem] = read_single_fasta_length(fasta_path)
+
+    if not lengths:
+        raise ValueError(f"No FASTA files found in directory: {fasta_dir}")
+
+    return lengths
+
+
+def read_blocks(path: Path) -> dict[str, list[BlockFeature]]:
+    """Read conserved blocks from the enriched block coordinates TSV."""
+    dataframe = pl.read_csv(path, separator="\t")
+
+    required_columns = {
+        "block_id",
+        "sample",
+        "block_start_in_zone",
+        "block_end_in_zone",
+        "block_start_in_source_seq",
+        "block_end_in_source_seq",
+    }
+    missing_columns = required_columns - set(dataframe.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Missing required columns in block coordinates TSV {path}: {sorted(missing_columns)}"
+        )
+
+    blocks_by_sample: dict[str, list[BlockFeature]] = {}
+    for row in dataframe.iter_rows(named=True):
+        block = BlockFeature(
+            sample=str(row["sample"]),
+            block_id=str(row["block_id"]),
+            block_start_in_zone=int(row["block_start_in_zone"]),
+            block_end_in_zone=int(row["block_end_in_zone"]),
+            block_start_in_source_seq=int(row["block_start_in_source_seq"]),
+            block_end_in_source_seq=int(row["block_end_in_source_seq"]),
+        )
+        blocks_by_sample.setdefault(block.sample, []).append(block)
+
+    return blocks_by_sample
+
+
+def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
+    """Read SNPs from the long-format SNP TSV."""
+    dataframe = pl.read_csv(path, separator="\t")
+    required_columns = {
+        "block_id",
+        "aln_pos",
+        "sample",
+        "nt",
+        "pos_in_block",
+        "pos_in_zone",
+        "pos_in_source_seq",
+    }
+    missing_columns = required_columns - set(dataframe.columns)
+    if missing_columns:
+        raise ValueError(f"Missing required columns in SNP TSV {path}: {sorted(missing_columns)}")
+
+    snps_by_sample: dict[str, list[SnpFeature]] = {}
+    for row in dataframe.iter_rows(named=True):
+        snp = SnpFeature(
+            sample=str(row["sample"]),
+            block_id=str(row["block_id"]),
+            aln_pos=int(row["aln_pos"]),
+            nt=str(row["nt"]),
+            pos_in_block=int(row["pos_in_block"]),
+            pos_in_zone=int(row["pos_in_zone"]),
+            pos_in_source_seq=int(row["pos_in_source_seq"]),
+        )
+        snps_by_sample.setdefault(snp.sample, []).append(snp)
+
+    return snps_by_sample
+
+
+def read_summary_stats(path: Path) -> dict[str, object]:
+    """Read summary statistics from a JSON file."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_masked_block_n_stats(
+    path: Path,
+) -> dict[str, dict[str, dict[str, int | float]]]:
+    """Read masked block N-content statistics as a nested dictionary."""
+    dataframe = pl.read_csv(path, separator="\t")
+
+    stats: dict[str, dict[str, dict[str, int | float]]] = {}
+
+    for row in dataframe.iter_rows(named=True):
+        block_id = str(row["block_id"])
+        sample = str(row["sample"])
+
+        stats.setdefault(block_id, {})[sample] = {
+            "length_bp": int(row["length_bp"]),
+            "n_count": int(row["n_count"]),
+            "n_pct": float(row["n_pct"]),
+        }
+
+    return stats
+
+
+def normalize_distance(value: float) -> float:
+    """Normalize near-zero distances."""
+    return 0.0 if abs(value) < 1e-9 else value
+
+
+def parse_mash_matrix(path: Path, sample_order: list[str]) -> DistanceMatrix:
+    """Parse a Mash square distance matrix."""
+    rows = path.read_text(encoding="utf-8").splitlines()
+    header = rows[0].split("\t")[1:]
+
+    values_by_pair: dict[tuple[str, str], float] = {}
+
+    for row in rows[1:]:
+        fields = row.split("\t")
+        row_label = fields[0]
+        distances = [float(value) for value in fields[1:]]
+
+        for col_label, distance in zip(header, distances):
+            values_by_pair[(row_label, col_label)] = normalize_distance(distance)
+
+    values = [
+        [
+            values_by_pair[(row_label, col_label)]
+            for col_label in sample_order
+        ]
+        for row_label in sample_order
+    ]
+
+    return DistanceMatrix(
+        labels=sample_order,
+        values=values,
+        source="mash",
+        title="Mash distances, whole region",
+        unit="mash_distance",
+    )
+
+
+def parse_emboss_distmat(path: Path, sample_order: list[str], block_id: str) -> DistanceMatrix:
+    """Parse an EMBOSS distmat triangular matrix."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+
+    labels: list[str] = []
+    triangle_rows: list[list[float]] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        tokens = stripped.split()
+        if len(tokens) < 2:
+            continue
+
+        if not tokens[-1].isdigit():
+            continue
+
+        label = tokens[-2]
+        numeric_part = tokens[:-2]
+
+        try:
+            distances = [normalize_distance(float(value)) for value in numeric_part]
+        except ValueError:
+            continue
+
+        labels.append(label)
+        triangle_rows.append(distances)
+
+    n = len(labels)
+    matrix_by_label = {
+        label: {other_label: 0.0 for other_label in labels}
+        for label in labels
+    }
+
+    for row_index, row_values in enumerate(triangle_rows):
+        row_label = labels[row_index]
+
+        for offset, distance in enumerate(row_values):
+            col_index = row_index + offset
+            col_label = labels[col_index]
+
+            matrix_by_label[row_label][col_label] = distance
+            matrix_by_label[col_label][row_label] = distance
+
+    values = [
+        [
+            matrix_by_label[row_label][col_label]
+            for col_label in sample_order
+        ]
+        for row_label in sample_order
+    ]
+
+    return DistanceMatrix(
+        labels=sample_order,
+        values=values,
+        source="kimura2p",
+        title="Kimura 2P distances",
+        unit="substitutions_per_100_bases",
+    )
+
+
+def parse_kimura2p_distmat_dir(
+    distmat_dir: Path,
+    sample_order: list[str],
+) -> dict[str, dict[str, object]]:
+    """Parse all Kimura 2P EMBOSS distmat files from a directory."""
+    matrices = {}
+
+    for path in sorted(distmat_dir.glob("*.kimura2p.distmat")):
+        block_id = path.name.split(".", 1)[0]
+        matrices[block_id] = parse_emboss_distmat(
+            path=path,
+            sample_order=sample_order,
+            block_id=block_id,
+        ).to_dict()
+
+    return matrices
+
+
+def read_fasta_alignment(path: Path) -> dict[str, str]:
+    """Read a FASTA alignment as a sample-to-sequence mapping."""
+    if not path.is_file():
+        raise FileNotFoundError(f"Alignment file not found: {path}")
+
+    sequences: dict[str, str] = {}
+    current_name: str | None = None
+    current_chunks: list[str] = []
+
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+
+            if not stripped:
+                continue
+
+            if stripped.startswith(">"):
+                if current_name is not None:
+                    sequences[current_name] = "".join(current_chunks)
+
+                current_name = stripped[1:].split()[0]
+                current_chunks = []
+                continue
+
+            current_chunks.append(stripped)
+
+    if current_name is not None:
+        sequences[current_name] = "".join(current_chunks)
+
+    if not sequences:
+        raise ValueError(f"No aligned sequences found in alignment file: {path}")
+
+    return sequences
+
+
+def read_block_alignments(
+    align_dir: Path,
+    block_ids: list[str],
+) -> dict[str, BlockAlignment]:
+    """Read masked block alignments indexed by block ID."""
+    if not align_dir.is_dir():
+        raise FileNotFoundError(f"Alignment directory not found: {align_dir}")
+
+    alignments: dict[str, BlockAlignment] = {}
+
+    for block_id in block_ids:
+        alignment_path = align_dir / f"{block_id}.aln.fasta"
+
+        if not alignment_path.exists():
+            LOGGER.warning("Missing alignment for block %s: %s", block_id, alignment_path)
+            continue
+
+        alignments[block_id] = BlockAlignment(
+            block_id=block_id,
+            sequences_by_sample=read_fasta_alignment(alignment_path),
+        )
+
+    return alignments
+
+
+def write_html(html: str, output_path: Path) -> None:
+    """Write the final HTML file."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8")
+    LOGGER.info("Wrote %s", output_path)
+
+scripts/region_viewer/models.py
+#!/usr/bin/env python3
+# Author: Johanna Girodolle
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from attrs import define, field
+
+@define(frozen=True)
+class SampleRecord:
+    """Store one sample definition from the samples TSV."""
+
+    fasta_path: Path
+    sample: str
+    zone_start_in_source_seq: int = 1
+
+
+@define(frozen=True)
+class BlockFeature:
+    """Store one conserved block for one sample."""
+
+    sample: str
+    block_id: str
+    block_start_in_zone: int
+    block_end_in_zone: int
+    block_start_in_source_seq: int
+    block_end_in_source_seq: int
+
+    @property
+    def feature_id(self) -> str:
+        """Return a shared feature identifier."""
+        return f"block::{self.block_id}"
+
+
+@define(frozen=True)
+class SnpFeature:
+    """Store one SNP for one sample."""
+
+    sample: str
+    block_id: str
+    aln_pos: int
+    nt: str
+    pos_in_block: int
+    pos_in_zone: int
+    pos_in_source_seq: int
+
+    @property
+    def feature_id(self) -> str:
+        """Return a shared feature identifier."""
+        return f"snp::{self.block_id}::{self.aln_pos}"
+
+
+@define(frozen=True)
+class SampleData:
+    """Store all display data for one sample."""
+
+    sample: str
+    zone_length: int
+    blocks: list[BlockFeature] = field(factory=list)
+    snps: list[SnpFeature] = field(factory=list)
+
+
+@define(frozen=True)
+class DistanceMatrix:
+    """Represent a square distance matrix."""
+
+    labels: list[str]
+    values: list[list[float]]
+    source: str
+    title: str
+    unit: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Convert the distance matrix to a JSON-compatible dictionary."""
+        return {
+            "labels": self.labels,
+            "values": self.values,
+            "source": self.source,
+            "title": self.title,
+            "unit": self.unit,
+        }
+
+
+@define(frozen=True)
+class BlockAlignment:
+    """Store one multiple-sequence alignment for a collinear block."""
+
+    block_id: str
+    sequences_by_sample: dict[str, str]
+
+    def __attrs_post_init__(self) -> None:
+        """Validate that all aligned sequences have the same length."""
+        lengths = {len(sequence) for sequence in self.sequences_by_sample.values()}
+
+        if len(lengths) > 1:
+            raise ValueError(
+                f"Alignment for block {self.block_id} contains sequences "
+                "with inconsistent lengths."
+            )
+
+    @property
+    def length(self) -> int:
+        """Return the alignment length."""
+        if not self.sequences_by_sample:
+            return 0
+
+        return len(next(iter(self.sequences_by_sample.values())))
+
+    def to_payload(self) -> dict[str, str]:
+        """Return the alignment payload indexed by sample name."""
+        return self.sequences_by_sample
+
+scripts/region_viewer/payload.py
+#!/usr/bin/env python3
+# Author: Johanna Girodolle
+
+from __future__ import annotations
+
+from .constants import (
+    BLOCK_FILL,
+    BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
+    BLOCK_MIN_WIDTH_PX,
+    BOTTOM_MARGIN,
+    BP_TO_KB_THRESHOLD_BP,
+    END_PADDING_PX,
+    FEATURE_HEIGHT,
+    HOVER_HIGHLIGHT_COLOR,
+    KB_TO_MB_THRESHOLD_BP,
+    LEFT_MARGIN,
+    MAX_ZOOM_CAP,
+    PANEL_GAP,
+    PANEL_HEIGHT,
+    PIN_HIGHLIGHT_COLOR,
+    RIGHT_MARGIN,
+    SNP_COLOR,
+    SNP_HEIGHT,
+    SNP_HIGHLIGHT_MIN_WIDTH_PX,
+    SNP_LINE_WIDTH,
+    SNP_MIN_WIDTH_PX,
+    TARGET_TICK_SPACING_PX,
+    TARGET_VISIBLE_BP,
+    TOP_MARGIN,
+    TRACK_HEIGHT,
+    TRACK_Y_OFFSET,
+    VIEWER_MIN_WIDTH,
+    VIEWER_TOP_UI_HEIGHT,
+    ZOOM_STEPS,
+    RESIZER_WIDTH,
+    SIDEBAR_MAX_WIDTH_RATIO,
+    SIDEBAR_MIN_WIDTH,
+)
+from .models import BlockFeature, SampleData, SampleRecord, SnpFeature, BlockAlignment
+
+def build_sample_data(
+    sample_records: list[SampleRecord],
+    fasta_lengths: dict[str, int],
+    blocks_by_sample: dict[str, list[BlockFeature]],
+    snps_by_sample: dict[str, list[SnpFeature]],
+) -> list[SampleData]:
+    """Build plotting data in samples TSV order."""
+    sample_data: list[SampleData] = []
+
+    for sample_record in sample_records:
+        sample = sample_record.sample
+        if sample not in fasta_lengths:
+            raise ValueError(f"Missing FASTA length for sample {sample!r}")
+
+        sample_data.append(
+            SampleData(
+                sample=sample,
+                zone_length=fasta_lengths[sample],
+                blocks=sorted(
+                    blocks_by_sample.get(sample, []),
+                    key=lambda block: (
+                        block.block_start_in_zone,
+                        block.block_end_in_zone,
+                        block.block_id,
+                    ),
+                ),
+                snps=sorted(
+                    snps_by_sample.get(sample, []),
+                    key=lambda snp: (snp.pos_in_zone, snp.block_id, snp.aln_pos),
+                ),
+            )
+        )
+
+    return sample_data
+
+
+def build_region_payload(
+    sample_data: list[SampleData],
+    summary_stats: dict[str, object] | None = None,
+    mash_matrix: dict[str, object] | None = None,
+    kimura2p_matrices: dict[str, dict[str, object]] | None = None,
+    masked_block_n_stats: dict[str, dict[str, dict[str, int | float]]] | None = None,
+    block_alignments: dict[str, BlockAlignment] | None = None,
+) -> dict[str, object]:
+    """Build the JSON payload injected into the HTML."""
+    max_zone_length = max(sample.zone_length for sample in sample_data)
+
+    payload: dict[str, object] = {
+        "title": "Region overview",
+        "max_zone_length": max_zone_length,
+        "samples": [
+            {
+                "sample": sample.sample,
+                "zone_length": sample.zone_length,
+                "blocks": [
+                    {
+                        "feature_id": block.feature_id,
+                        "block_id": block.block_id,
+                        "block_start_in_zone": block.block_start_in_zone,
+                        "block_end_in_zone": block.block_end_in_zone,
+                        "block_start_in_source_seq": block.block_start_in_source_seq,
+                        "block_end_in_source_seq": block.block_end_in_source_seq,
+                    }
+                    for block in sample.blocks
+                ],
+                "snps": [
+                    {
+                        "feature_id": snp.feature_id,
+                        "block_id": snp.block_id,
+                        "aln_pos": snp.aln_pos,
+                        "nt": snp.nt,
+                        "pos_in_block": snp.pos_in_block,
+                        "pos_in_zone": snp.pos_in_zone,
+                        "pos_in_source_seq": snp.pos_in_source_seq,
+                    }
+                    for snp in sample.snps
+                ],
+            }
+            for sample in sample_data
+        ],
+        "summary_stats": summary_stats or {},
+        "mash_matrix": mash_matrix or {},
+        "kimura2p_matrices": kimura2p_matrices or {},
+        "masked_block_n_stats": masked_block_n_stats or {},
+        "block_alignments": {
+            block_id: alignment.to_payload()
+            for block_id, alignment in (block_alignments or {}).items()
+        },
+    }
+
+    return payload
+
+
+def build_config_payload() -> dict[str, object]:
+    """Build the viewer configuration payload."""
+    return {
+        "minWidth": VIEWER_MIN_WIDTH,
+        "leftMargin": LEFT_MARGIN,
+        "rightMargin": RIGHT_MARGIN,
+        "topMargin": TOP_MARGIN,
+        "bottomMargin": BOTTOM_MARGIN,
+        "endPaddingPx": END_PADDING_PX,
+        "panelHeight": PANEL_HEIGHT,
+        "panelGap": PANEL_GAP,
+        "trackY": TRACK_Y_OFFSET,
+        "trackHeight": TRACK_HEIGHT,
+        "featureHeight": FEATURE_HEIGHT,
+        "snpHeight": SNP_HEIGHT,
+        "snpStrokeWidth": SNP_LINE_WIDTH,
+        "blockFill": BLOCK_FILL,
+        "snpColor": SNP_COLOR,
+        "viewerTopUiHeight": VIEWER_TOP_UI_HEIGHT,
+        "targetVisibleBp": TARGET_VISIBLE_BP,
+        "targetTickSpacingPx": TARGET_TICK_SPACING_PX,
+        "bpToKbThresholdBp": BP_TO_KB_THRESHOLD_BP,
+        "kbToMbThresholdBp": KB_TO_MB_THRESHOLD_BP,
+        "maxZoomCap": MAX_ZOOM_CAP,
+        "zoomSteps": ZOOM_STEPS,
+        "blockMinWidthPx": BLOCK_MIN_WIDTH_PX,
+        "blockHighlightMinWidthPx": BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
+        "snpMinWidthPx": SNP_MIN_WIDTH_PX,
+        "snpHighlightMinWidthPx": SNP_HIGHLIGHT_MIN_WIDTH_PX,
+        "pinHighlightColor": PIN_HIGHLIGHT_COLOR,
+        "hoverHighlightColor": HOVER_HIGHLIGHT_COLOR,
+        "sidebarMinWidth": SIDEBAR_MIN_WIDTH,
+        "sidebarMaxWidthRatio": SIDEBAR_MAX_WIDTH_RATIO,
+        "resizerWidth": RESIZER_WIDTH,
     }

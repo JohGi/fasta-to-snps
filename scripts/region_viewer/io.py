@@ -8,14 +8,13 @@ from pathlib import Path
 import polars as pl
 import json
 import logging
+import re
 
-from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix
-
+from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix, BlockAlignment
 
 LOGGER = logging.getLogger(__name__)
 
-# FLOAT_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
-
+COORD_SUFFIX_PATTERN = re.compile(r":\d+-\d+$")
 
 
 def read_samples(path: Path) -> list[SampleRecord]:
@@ -301,6 +300,71 @@ def parse_kimura2p_distmat_dir(
         ).to_dict()
 
     return matrices
+
+def parse_alignment_sample_name(header: str) -> str:
+    """Extract the sample name from an alignment FASTA header."""
+    first_token = header.strip().split()[0]
+    return COORD_SUFFIX_PATTERN.sub("", first_token)
+
+
+def read_fasta_alignment(path: Path) -> dict[str, str]:
+    """Read a FASTA alignment as a sample-to-sequence mapping."""
+    if not path.is_file():
+        raise FileNotFoundError(f"Alignment file not found: {path}")
+
+    sequences: dict[str, str] = {}
+    current_name: str | None = None
+    current_chunks: list[str] = []
+
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+
+            if not stripped:
+                continue
+
+            if stripped.startswith(">"):
+                if current_name is not None:
+                    sequences[current_name] = "".join(current_chunks)
+
+                current_name = parse_alignment_sample_name(stripped[1:])
+                current_chunks = []
+                continue
+
+            current_chunks.append(stripped)
+
+    if current_name is not None:
+        sequences[current_name] = "".join(current_chunks)
+
+    if not sequences:
+        raise ValueError(f"No aligned sequences found in alignment file: {path}")
+
+    return sequences
+
+
+def read_block_alignments(
+    align_dir: Path,
+    block_ids: list[str],
+) -> dict[str, BlockAlignment]:
+    """Read masked block alignments indexed by block ID."""
+    if not align_dir.is_dir():
+        raise FileNotFoundError(f"Alignment directory not found: {align_dir}")
+
+    alignments: dict[str, BlockAlignment] = {}
+
+    for block_id in block_ids:
+        alignment_path = align_dir / f"{block_id}.aln.fasta"
+
+        if not alignment_path.exists():
+            LOGGER.warning("Missing alignment for block %s: %s", block_id, alignment_path)
+            continue
+
+        alignments[block_id] = BlockAlignment(
+            block_id=block_id,
+            sequences_by_sample=read_fasta_alignment(alignment_path),
+        )
+
+    return alignments
 
 
 def write_html(html: str, output_path: Path) -> None:

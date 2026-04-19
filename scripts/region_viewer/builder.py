@@ -11,6 +11,7 @@ from .html_template import build_html
 from .io import (
     parse_kimura2p_distmat_dir,
     parse_mash_matrix,
+    read_block_alignments,
     read_blocks,
     read_fasta_lengths,
     read_masked_block_n_stats,
@@ -34,6 +35,7 @@ class RegionOverviewBuilder:
     mash_matrix_path: Path
     kimura2p_distmat_dir: Path
     masked_block_n_stats_path: Path
+    masked_align_dir: Path
     output_path: Path
 
     def run(self) -> None:
@@ -43,6 +45,17 @@ class RegionOverviewBuilder:
 
         fasta_lengths = read_fasta_lengths(self.fasta_dir)
         blocks_by_sample = read_blocks(self.block_coords_tsv_path)
+        block_ids = sorted(
+            {
+                block.block_id
+                for sample_blocks in blocks_by_sample.values()
+                for block in sample_blocks
+            }
+        )
+        block_alignments = read_block_alignments(
+            align_dir=self.masked_align_dir,
+            block_ids=block_ids,
+        )
         snps_by_sample = read_snps(self.snp_long_path)
 
         summary_stats = read_summary_stats(self.summary_stats_json_path)
@@ -71,6 +84,7 @@ class RegionOverviewBuilder:
             mash_matrix=mash_matrix,
             kimura2p_matrices=kimura2p_matrices,
             masked_block_n_stats=masked_block_n_stats,
+            block_alignments=block_alignments,
         )
 
         html = build_html(region_data)

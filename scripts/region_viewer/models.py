@@ -80,3 +80,33 @@ class DistanceMatrix:
             "title": self.title,
             "unit": self.unit,
         }
+
+
+@define(frozen=True)
+class BlockAlignment:
+    """Store one multiple-sequence alignment for a collinear block."""
+
+    block_id: str
+    sequences_by_sample: dict[str, str]
+
+    def __attrs_post_init__(self) -> None:
+        """Validate that all aligned sequences have the same length."""
+        lengths = {len(sequence) for sequence in self.sequences_by_sample.values()}
+
+        if len(lengths) > 1:
+            raise ValueError(
+                f"Alignment for block {self.block_id} contains sequences "
+                "with inconsistent lengths."
+            )
+
+    @property
+    def length(self) -> int:
+        """Return the alignment length."""
+        if not self.sequences_by_sample:
+            return 0
+
+        return len(next(iter(self.sequences_by_sample.values())))
+
+    def to_payload(self) -> dict[str, str]:
+        """Return the alignment payload indexed by sample name."""
+        return self.sequences_by_sample

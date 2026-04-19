@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary-stats-json", type=Path, required=True)
     parser.add_argument("--mash-matrix", type=Path, required=True)
     parser.add_argument("--kimura2p-distmat-dir", type=Path, required=True)
+    parser.add_argument("--masked-align-dir", type=Path, required=True)
     parser.add_argument("--masked-block-n-stats", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
@@ -58,6 +59,7 @@ def main() -> None:
         summary_stats_json_path=args.summary_stats_json,
         mash_matrix_path=args.mash_matrix,
         kimura2p_distmat_dir=args.kimura2p_distmat_dir,
+        masked_align_dir=args.masked_align_dir,
         masked_block_n_stats_path=args.masked_block_n_stats,
         output_path=args.output,
     )
