@@ -49,7 +49,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     .content-row {
       display: flex;
-      align-items: flex-start;
+      align-items: stretch;
       gap: 8px;
       width: 100%%;
       min-width: 0;
@@ -200,7 +200,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       width: %(sidebar_width)spx;
       min-width: %(sidebar_min_width)spx;
       max-width: none;
-      max-height: calc(100vh - 40px);
+      max-height: none;
       overflow-y: auto;
       scrollbar-gutter: stable;
       padding: 14px;
@@ -423,7 +423,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       charWidth: 14,
       minCharWidth: 6,
       maxCharWidth: 28,
-      fontSize: 13,
+      letterFontSize: 9,
       labelFontSize: 13,
       axisHeight: 24,
       bottomPadding: 28,
@@ -1878,6 +1878,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         - state.alignmentScrollX;
     }
 
+    function alignmentColumnCenterToX(columnIndex) {
+      return alignmentColumnToX(columnIndex) + getAlignmentCharWidth() / 2;
+    }
+
     function getBaseFill(base) {
       const normalizedBase = String(base).toUpperCase();
 
@@ -1936,7 +1940,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const firstTick = Math.ceil((range.firstColumn + 1) / step) * step;
 
       for (let value = firstTick; value <= range.lastColumn; value += step) {
-        const x = alignmentColumnToX(value - 1);
+        const x = alignmentColumnCenterToX(value - 1);
 
         layer.add(new Konva.Line({
           points: [x, y, x, y + 6],
@@ -1958,7 +1962,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
     }
 
-    function drawAlignmentRows(layer, alignmentData, sampleNames, alignmentLength) {
+    function getBlockSnpAlignmentColumns(blockId) {
+      const snpColumns = new Set();
+
+      if (!blockId) {
+        return snpColumns;
+      }
+
+      for (const sample of REGION_DATA.samples) {
+        for (const snp of sample.snps) {
+          if (String(snp.block_id) !== String(blockId)) {
+            continue;
+          }
+
+          const alnPos = Number(snp.aln_pos);
+          if (!Number.isNaN(alnPos) && alnPos >= 1) {
+            snpColumns.add(alnPos - 1);
+          }
+        }
+      }
+
+      return snpColumns;
+    }
+
+    function drawAlignmentRows(layer, alignmentData, sampleNames, alignmentLength, snpColumns) {
       const range = getVisibleAlignmentColumnRange(alignmentLength);
       const charWidth = getAlignmentCharWidth();
       const baseY = ALIGNMENT.topMargin + ALIGNMENT.axisHeight;
@@ -1981,6 +2008,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         for (let columnIndex = range.firstColumn; columnIndex < range.lastColumn; columnIndex += 1) {
           const base = sequence[columnIndex] || "";
           const x = alignmentColumnToX(columnIndex);
+          const isSnpColumn = snpColumns.has(columnIndex);
 
           layer.add(new Konva.Rect({
             x,
@@ -1996,12 +2024,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           if (charWidth >= 9) {
             layer.add(new Konva.Text({
               x,
-              y: rowY + 4,
+              y: rowY,
               width: charWidth,
+              height: ALIGNMENT.rowHeight - 1,
               text: base,
-              fontSize: ALIGNMENT.fontSize,
+              fontSize: isSnpColumn
+                ? ALIGNMENT.letterFontSize + 2
+                : ALIGNMENT.letterFontSize,
+              fontStyle: isSnpColumn ? "bold" : "normal",
               fill: getBaseTextFill(base),
               align: "center",
+              verticalAlign: "middle",
               listening: false
             }));
           }
@@ -2213,7 +2246,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }));
 
       drawAlignmentAxis(alignmentSequenceLayer, alignmentLength);
-      drawAlignmentRows(alignmentSequenceLayer, alignmentData, sampleNames, alignmentLength);
+      const snpColumns = getBlockSnpAlignmentColumns(blockId);
+      drawAlignmentRows(
+        alignmentSequenceLayer,
+        alignmentData,
+        sampleNames,
+        alignmentLength,
+        snpColumns
+      );
       drawAlignmentScrollbar(alignmentInteractionLayer, alignmentLength, sampleNames.length);
 
       alignmentStage.draw();
