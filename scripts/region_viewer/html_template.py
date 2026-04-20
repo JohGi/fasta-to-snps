@@ -148,7 +148,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     .viewer {
       width: 100%%;
-      min-width: %(viewer_min_width)spx;
+      min-width: 0;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: white;
@@ -1360,7 +1360,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function getStageWidth() {
       const viewerElement = getViewerElement();
-      return Math.max(CONFIG.minWidth, viewerElement.clientWidth);
+      return Math.max(1, viewerElement.clientWidth);
     }
 
     function getViewportTrackWidth() {
@@ -1369,6 +1369,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function getDrawableTrackWidth() {
       return Math.max(1, getViewportTrackWidth() - CONFIG.endPaddingPx);
+    }
+
+    function getVisibleBiologicalEndX() {
+      return worldXToScreenX(getVisibleEndBp());
+    }
+
+    function getVisibleBiologicalWidth() {
+      return Math.max(1, getVisibleBiologicalEndX() - getLeftMargin());
     }
 
     function getContentWidth() {
@@ -1556,7 +1564,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function drawGlobalAxis(layer) {
       const x0 = getLeftMargin();
-      const x1 = getLeftMargin() + getDrawableTrackWidth();
+      const x1 = getVisibleBiologicalEndX();
       const axisY = CONFIG.viewerTopUiHeight + 24;
 
       const axis = new Konva.Line({
@@ -1907,7 +1915,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function drawSamplePanelBackground(layer, sample, panelTop) {
       const backgroundX = 4;
-      const backgroundRight = getLeftMargin() + getDrawableTrackWidth() + 8;
+      const backgroundRight = getVisibleBiologicalEndX() + 8;
 
       layer.add(new Konva.Rect({
         x: backgroundX,
