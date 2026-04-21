@@ -245,7 +245,10 @@ def parse_emboss_distmat(path: Path, sample_order: list[str], block_id: str) -> 
         numeric_part = tokens[:-2]
 
         try:
-            distances = [normalize_distance(float(value)) for value in numeric_part]
+            distances = [
+                normalize_distance(float(value) / 100)
+                for value in numeric_part
+            ]
         except ValueError:
             continue
 
@@ -281,7 +284,7 @@ def parse_emboss_distmat(path: Path, sample_order: list[str], block_id: str) -> 
         values=values,
         source="kimura2p",
         title="Kimura 2P distances",
-        unit="substitutions_per_100_bases",
+        unit="substitutions_per_base",
     )
 
 

@@ -159,7 +159,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       outline: none;
     }
 
-        .alignment-panel {
+    .alignment-panel {
       width: 100%%;
       padding: 14px;
       border: 1px solid var(--border);
@@ -303,6 +303,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       margin: 0;
     }
 
+    .info-tooltip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      margin-left: 8px;
+      padding: 2px 7px;
+      border: 1px solid #cfd6df;
+      border-radius: 999px;
+      color: #4b5563;
+      background: #f8fafc;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+      vertical-align: middle;
+      cursor: help;
+    }
+
+    .info-tooltip:hover {
+      border-color: #9ca3af;
+      background: #f1f5f9;
+      color: #111827;
+    }
+
+    .info-tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 50%%;
+      bottom: calc(100%% + 8px);
+      transform: translateX(-50%%);
+      z-index: 50;
+      display: none;
+      width: max-content;
+      max-width: 280px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      background: #ffffff;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+      font-size: 12px;
+      font-weight: normal;
+      line-height: 1.35;
+      white-space: pre-line;
+    }
+
+    .info-tooltip:hover::after {
+      display: block;
+    }
+
     .sample-card {
       margin-top: 10px;
       padding: 10px;
@@ -394,7 +443,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="viewer-column" id="viewer-column">
         <section id="info-panel" class="info-panel">
           <h2>Region viewer</h2>
-          <p class="hint">Hover a block or a SNP to highlight the corresponding feature across all samples. Click a feature to pin it in the sidebar.</p>
+          <p class="hint">
+            Overview of collinear blocks detected across samples in the selected region, with SNPs retained after filtering.
+          </p>
+          <p class="hint">
+            Hover a feature to highlight it across samples.
+          </p>
         </section>
 
         <div class="viewer-wrapper">
@@ -416,7 +470,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <section id="alignment-panel" class="alignment-panel hidden">
           <div class="alignment-header">
             <div>
-              <h2>Block alignment</h2>
+              <h2>
+                Block alignment
+                <span class="info-tooltip" data-tooltip="Displayed alignments are soft-masked.
+                Asterisks mark SNPs kept after filtering.">Info</span>
+              </h2>
               <p id="alignment-subtitle" class="hint">Hover or pin a block to display its alignment.</p>
             </div>
             <div class="alignment-toolbar">
@@ -938,6 +996,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     }
 
+    function getDistanceMatrixTooltip(matrix) {
+      if (matrix.source === "kimura2p") {
+        return `Values are substitutions per base.
+    Computed from unmasked block alignments.`;
+      }
+
+      return "";
+    }
+
+    function renderInfoTooltip(text) {
+      if (!text) {
+        return "";
+      }
+
+      return `<span class="info-tooltip" data-tooltip="${escapeHtml(text)}">Info</span>`;
+    }
+
     function renderDistanceMatrix(matrix) {
       if (!matrix || !matrix.labels || !matrix.values) {
         return `
@@ -948,12 +1023,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       const labels = matrix.labels;
+      const tooltip = getDistanceMatrixTooltip(matrix);
       const colorScale = matrix.source === "kimura2p"
-      ? getKimura2pGlobalColorScaleBounds()
-      : getMatrixColorScaleBounds(matrix);
+        ? getKimura2pGlobalColorScaleBounds()
+        : getMatrixColorScaleBounds(matrix);
+
       let html = `
         <div class="distance-matrix-card">
-          <p class="distance-matrix-title">${escapeHtml(matrix.title || "Distance matrix")}</p>
+          <p class="distance-matrix-title">
+            ${escapeHtml(matrix.title || "Distance matrix")}
+            ${renderInfoTooltip(tooltip)}
+          </p>
           <div class="distance-matrix-scroll">
             <table class="distance-matrix-table">
               <thead>
@@ -2890,7 +2970,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       const subtitle = getAlignmentSubtitle();
       if (subtitle) {
-        subtitle.textContent = `Block ${blockId} (${alignmentLength} pb)`;
+        subtitle.textContent = `Block ${blockId} (${alignmentLength} bp)`;
       }
 
       const stageHeight = getAlignmentStageHeight(sampleNames.length);
