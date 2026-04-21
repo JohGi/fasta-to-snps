@@ -930,34 +930,77 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function getKimura2pGlobalColorScaleBounds() {
-      const values = [];
-
-      Object.values(REGION_DATA.kimura2p_matrices || {}).forEach(matrix => {
+      const entries = [];
+    
+      Object.entries(REGION_DATA.kimura2p_matrices || {}).forEach(([blockId, matrix]) => {
         if (!matrix || !matrix.values) {
           return;
         }
-
+    
         matrix.values.forEach((row, rowIndex) => {
           row.forEach((value, colIndex) => {
-            if (rowIndex === colIndex) {
+            if (colIndex <= rowIndex) {
               return;
             }
-
+    
             const numericValue = Number(value);
             if (!Number.isNaN(numericValue)) {
-              values.push(numericValue);
+              entries.push({
+                value: numericValue,
+                blockId,
+                rowIndex,
+                colIndex,
+                rowLabel: matrix.labels?.[rowIndex],
+                colLabel: matrix.labels?.[colIndex]
+              });
             }
           });
         });
       });
-
-      if (values.length === 0) {
+    
+      if (entries.length === 0) {
+        console.warn("Kimura 2P color scale: no numeric off-diagonal values found.");
         return { min: 0, max: 1 };
       }
-
+    
+      const values = entries.map(entry => entry.value);
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+    
+      const maxEntries = entries.filter(entry => entry.value === maxValue);
+      const minEntries = entries.filter(entry => entry.value === minValue);
+      const topEntries = [...entries]
+        .sort((left, right) => right.value - left.value)
+        .slice(0, 10);
+    
+      const bestEntryByBlock = new Map();
+    
+      for (const entry of entries) {
+        const currentBest = bestEntryByBlock.get(entry.blockId);
+    
+        if (!currentBest || entry.value > currentBest.value) {
+          bestEntryByBlock.set(entry.blockId, entry);
+        }
+      }
+    
+      const topUniqueBlockEntries = [...bestEntryByBlock.values()]
+        .sort((left, right) => right.value - left.value)
+        .slice(0, 10);
+    
+      console.log("Kimura 2P global color scale bounds", {
+        min: minValue,
+        max: maxValue,
+        valueCount: entries.length,
+        blockCount: bestEntryByBlock.size,
+        minEntries: minEntries.slice(0, 10),
+        maxEntries: maxEntries.slice(0, 10),
+        topEntries,
+        topUniqueBlockEntries
+      });
+    
       return {
-        min: Math.min(...values),
-        max: Math.max(...values)
+        min: minValue,
+        max: maxValue
       };
     }
 

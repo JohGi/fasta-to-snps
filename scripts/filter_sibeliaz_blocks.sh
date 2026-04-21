@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Filter SibeliaZ GFF blocks using a two-pass awk strategy.
 # Keep blocks where:
-#   - maximum feature length is greater than or equal to min_len
+#   - every feature length is greater than or equal to min_len
 #   - number of distinct sequence names is at least nb_samples
 #   - no sequence name appears more than once in the same block
 #   - all features in the block have the same strand
@@ -17,9 +17,9 @@ Usage:
 
 Arguments:
   --gff         Input GFF file
-  --nb_samples  Required minimum number of distinct sequence names per block
-  --min_len     Minimum maximum feature length per block, inclusive (default: 500)
-  --output      Output filtered GFF file
+  --nb_samples Required minimum number of distinct sequence names per block
+  --min_len    Minimum feature length required for every block occurrence, inclusive (default: 500)
+  --output     Output filtered GFF file
 EOF
 }
 
@@ -31,12 +31,31 @@ parse_args() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --gff) gff="${2:-}"; shift 2 ;;
-      --nb_samples) nb_samples="${2:-}"; shift 2 ;;
-      --min_len) min_len="${2:-}"; shift 2 ;;
-      --output) output="${2:-}"; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) echo "ERROR: Unknown argument: $1" >&2; usage >&2; exit 2 ;;
+      --gff)
+        gff="${2:-}"
+        shift 2
+        ;;
+      --nb_samples)
+        nb_samples="${2:-}"
+        shift 2
+        ;;
+      --min_len)
+        min_len="${2:-}"
+        shift 2
+        ;;
+      --output)
+        output="${2:-}"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "ERROR: Unknown argument: $1" >&2
+        usage >&2
+        exit 2
+        ;;
     esac
   done
 
@@ -84,17 +103,18 @@ run_filter() {
       if (!match($9, /(^|;)ID=([^;]+)/, m)) {
         next
       }
+
       id = m[2]
-
       sequence_name = $1
-
       length_bp = $5 - $4 + 1
-      if (length_bp > maxlen[id]) {
-        maxlen[id] = length_bp
+
+      if (!(id in min_feature_len) || length_bp < min_feature_len[id]) {
+        min_feature_len[id] = length_bp
       }
 
       key = id SUBSEP sequence_name
       feature_count[key]++
+
       if (feature_count[key] == 1) {
         n_sequences[id]++
       }
@@ -117,17 +137,21 @@ run_filter() {
       if (!match($9, /(^|;)ID=([^;]+)/, m)) {
         next
       }
+
       id = m[2]
 
-      if (maxlen[id] < min_len) {
+      if (min_feature_len[id] < min_len) {
         next
       }
+
       if (n_sequences[id] < nb_samples) {
         next
       }
+
       if (has_paralog[id]) {
         next
       }
+
       if (mixed_strand[id]) {
         next
       }
