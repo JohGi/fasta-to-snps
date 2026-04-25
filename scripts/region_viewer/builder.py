@@ -5,9 +5,11 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from attrs import define
+import yaml
+from attrs import define, field
 
 from .html_template import build_html
 from .io import (
@@ -24,8 +26,42 @@ from .io import (
     read_summary_stats,
     write_html,
 )
+
+LOGGER = logging.getLogger(__name__)
 from .models import BlockFeature
 from .payload import build_region_payload, build_sample_data
+
+
+def read_analysis_settings(config_yaml_path: Path | None) -> dict[str, object]:
+    """Extract display-relevant analysis settings from the pipeline config YAML.
+
+    Returns an empty dict if the path is None, missing, or unreadable.
+    Missing individual keys are represented as None or empty lists.
+    """
+    if config_yaml_path is None:
+        return {}
+
+    try:
+        raw = yaml.safe_load(config_yaml_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        LOGGER.warning("Could not read config YAML: %s", config_yaml_path)
+        return {}
+
+    block_filtering = raw.get("block_filtering") or {}
+    snp_detection = raw.get("snp_detection") or {}
+    snp_group_filtering = raw.get("snp_group_filtering") or {}
+
+    min_len = block_filtering.get("min_len")
+    min_flank = snp_detection.get("min_flank")
+    group_a = list(snp_group_filtering.get("group_a") or [])
+    group_b = list(snp_group_filtering.get("group_b") or [])
+
+    return {
+        "minimum_block_length_bp": int(min_len) if min_len is not None else None,
+        "minimum_snp_flank_bp": int(min_flank) if min_flank is not None else None,
+        "snp_group_a": group_a,
+        "snp_group_b": group_b,
+    }
 
 
 @define
@@ -44,6 +80,7 @@ class RegionOverviewBuilder:
     gff_tracks_json_path: Path
     title: str
     output_path: Path
+    config_yaml_path: Path | None = field(default=None)
 
     def run(self) -> None:
         """Run the full HTML generation workflow."""
@@ -85,6 +122,8 @@ class RegionOverviewBuilder:
             sample_data=sample_data,
         )
 
+        analysis_settings = read_analysis_settings(self.config_yaml_path)
+
         region_data = build_region_payload(
             sample_data=sample_data,
             summary_stats=summary_stats,
@@ -93,6 +132,7 @@ class RegionOverviewBuilder:
             masked_block_n_stats=masked_block_n_stats,
             block_alignments=block_alignments,
             gff_tracks_by_sample=gff_tracks_by_sample,
+            analysis_settings=analysis_settings,
         )
 
         html = build_html(region_data, self.title)

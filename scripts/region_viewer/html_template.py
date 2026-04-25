@@ -239,18 +239,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       user-select: none;
     }
 
-    .sidebar {
+    .right-column {
       flex: 0 0 %(sidebar_width)spx;
       width: %(sidebar_width)spx;
       min-width: %(sidebar_min_width)spx;
-      max-width: none;
-      max-height: none;
-      overflow-y: auto;
-      scrollbar-gutter: stable;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sidebar-panel {
       padding: 14px;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: var(--panel-bg);
+    }
+
+    .sidebar {
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      flex: 1 1 0;
+      min-height: 0;
     }
 
     .sidebar-header {
@@ -503,12 +512,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
 
       <div id="column-resizer" class="column-resizer" aria-label="Resize sidebar"></div>
-      <aside id="sidebar" class="sidebar">
-        <div class="sidebar-header">
-          <h2>Region overview</h2>
-        </div>
-        <p class="hint">Loading region summary.</p>
-      </aside>
+      <div class="right-column" id="right-column">
+        <aside id="analysis-settings-sidebar" class="sidebar-panel">
+          <div class="sidebar-header">
+            <h2>Analysis settings</h2>
+          </div>
+          <div id="analysis-settings-content"></div>
+        </aside>
+        <aside id="sidebar" class="sidebar-panel sidebar">
+          <div class="sidebar-header">
+            <h2>Region overview</h2>
+          </div>
+          <p class="hint">Loading region summary.</p>
+        </aside>
+      </div>
     </div>
   </div>
   <div id="floating-tooltip" class="floating-tooltip"></div>
@@ -1161,6 +1178,104 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return html;
     }
 
+    function formatSnpGroups(settings) {
+      const groupA = settings.snp_group_a || [];
+      const groupB = settings.snp_group_b || [];
+
+      if (groupA.length === 0 && groupB.length === 0) {
+        return "none";
+      }
+
+      if (groupA.length === 0) {
+        return `all other samples vs ${groupB.join(", ")}`;
+      }
+
+      if (groupB.length === 0) {
+        return `${groupA.join(", ")} vs all other samples`;
+      }
+
+      return `${groupA.join(", ")} vs ${groupB.join(", ")}`;
+    }
+
+    function renderAnalysisSettings() {
+      const settings = REGION_DATA.analysis_settings;
+      const container = document.getElementById("analysis-settings-content");
+
+      if (!container) {
+        return;
+      }
+
+      if (!settings || Object.keys(settings).length === 0) {
+        return;
+      }
+
+      const minBlock = settings.minimum_block_length_bp !== null && settings.minimum_block_length_bp !== undefined
+        ? `${settings.minimum_block_length_bp} bp`
+        : "NA";
+
+      const minFlank = settings.minimum_snp_flank_bp !== null && settings.minimum_snp_flank_bp !== undefined
+        ? `${settings.minimum_snp_flank_bp} bp`
+        : "NA";
+
+      const snpGroups = formatSnpGroups(settings);
+
+      const entries = [
+        ["Minimum block length", minBlock],
+        ["Minimum SNP flank", minFlank],
+        ["SNP filtering groups", snpGroups]
+      ];
+
+      let html = `<div class="summary-card"><div class="kv">`;
+
+      for (const [label, value] of entries) {
+        html += `<div class="key">${escapeHtml(label)}</div><div>${escapeHtml(value)}</div>`;
+      }
+
+      html += `</div></div>`;
+
+      container.innerHTML = html;
+    }
+
+    function renderSampleRegionStats() {
+      const sampleStats = REGION_DATA.summary_stats?.samples;
+
+      if (!sampleStats || Object.keys(sampleStats).length === 0) {
+        return `
+          <div class="summary-card">
+            <h3>Sample region statistics</h3>
+            <p class="hint">No per-sample region statistics available.</p>
+          </div>
+        `;
+      }
+
+      let html = `<div class="summary-card"><h3>Sample region statistics</h3>`;
+
+      for (const sampleName of getSampleOrder()) {
+        const stats = sampleStats[sampleName];
+        html += `<div class="sample-card"><h3>${escapeHtml(sampleName)}</h3>`;
+
+        if (!stats) {
+          html += `<p class="hint">No data.</p>`;
+        } else {
+          const entries = [
+            ["Zone length (bp)", stats.zone_length_bp],
+            ["Covered by blocks (%%)", `${formatNumber(Number(stats.covered_pct_of_zone), 2)}%%`]
+          ];
+
+          html += `<div class="kv">`;
+          for (const [label, value] of entries) {
+            html += `<div class="key">${escapeHtml(label)}</div><div>${escapeHtml(String(value))}</div>`;
+          }
+          html += `</div>`;
+        }
+
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+      return html;
+    }
+
     function getMaskedNStats(blockId, sampleName) {
       return REGION_DATA.masked_block_n_stats?.[String(blockId)]?.[sampleName] || null;
     }
@@ -1238,11 +1353,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       return null;
     }
 
+    function updateAnalysisSettingsVisibility() {
+      const analysisPanel = document.getElementById("analysis-settings-sidebar");
+
+      if (!analysisPanel) {
+        return;
+      }
+
+      const hasDisplayedFeature = Boolean(getDisplayedFeature());
+      analysisPanel.classList.toggle("hidden", hasDisplayedFeature);
+      syncSidebarHeightToViewerColumn();
+    }
+
     function applyActiveDisplay() {
       hideAllHighlights();
       updateFeatureNavigationButtons();
 
       const displayed = getDisplayedFeature();
+      updateAnalysisSettingsVisibility();
+
       if (!displayed) {
         renderSidebarDefault();
         updateActiveAlignmentViewer();
@@ -1276,6 +1405,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
         <div class="sidebar-section">
           ${renderGlobalSummaryStats()}
+        </div>
+        <div class="sidebar-section">
+          ${renderSampleRegionStats()}
         </div>
       `;
     }
@@ -3205,10 +3337,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function setupColumnResizer() {
       const contentRow = document.getElementById("content-row");
-      const sidebar = document.getElementById("sidebar");
+      const rightColumn = document.getElementById("right-column");
       const resizer = document.getElementById("column-resizer");
 
-      if (!contentRow || !sidebar || !resizer) {
+      if (!contentRow || !rightColumn || !resizer) {
         return;
       }
 
@@ -3235,8 +3367,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           Math.min(maxSidebarWidth, proposedWidth)
         );
 
-        sidebar.style.flexBasis = `${sidebarWidth}px`;
-        sidebar.style.width = `${sidebarWidth}px`;
+        rightColumn.style.flexBasis = `${sidebarWidth}px`;
+        rightColumn.style.width = `${sidebarWidth}px`;
 
         normalizeScrollX();
         redrawStage();
@@ -3263,15 +3395,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function syncSidebarHeightToViewerColumn() {
       const viewerColumn = document.getElementById("viewer-column");
-      const sidebar = document.getElementById("sidebar");
+      const rightColumn = document.getElementById("right-column");
 
-      if (!viewerColumn || !sidebar) {
+      if (!viewerColumn || !rightColumn) {
         return;
       }
 
       const height = viewerColumn.getBoundingClientRect().height;
-      sidebar.style.height = `${height}px`;
-      sidebar.style.maxHeight = `${height}px`;
+      rightColumn.style.height = `${height}px`;
+      rightColumn.style.maxHeight = `${height}px`;
     }
 
     function setupFloatingTooltips() {
@@ -3427,6 +3559,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     alignmentStage.on("pointerleave", stopAlignmentDrag);
 
     state.featureGroups = buildFeatureGroups(REGION_DATA);
+    renderAnalysisSettings();
     renderSidebarDefault();
     state.zoomX = getInitialZoomX();
     state.scrollX = 0;

@@ -91,6 +91,7 @@ def build_region_payload(
     masked_block_n_stats: dict[str, dict[str, dict[str, int | float]]] | None = None,
     block_alignments: dict[str, BlockAlignment] | None = None,
     gff_tracks_by_sample: dict[str, list[GffTrack]] | None = None,
+    analysis_settings: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build the JSON payload injected into the HTML."""
     max_zone_length = max(sample.zone_length for sample in sample_data)
@@ -159,6 +160,7 @@ def build_region_payload(
             block_id: alignment.to_payload()
             for block_id, alignment in (block_alignments or {}).items()
         },
+        "analysis_settings": analysis_settings or {},
     }
 
     return payload

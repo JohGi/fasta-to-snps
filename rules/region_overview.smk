@@ -51,6 +51,7 @@ rule generate_region_viewer:
             --masked-align-dir "{ALIGN_DIR}" \
             --masked-block-n-stats "{input.n_stats_tsv}" \
             --gff-tracks-json "{input.gff_tracks_json}" \
+            --config-yaml "{workflow.configfiles[0]}" \
             --title "{PROJECT_TITLE}" \
             --output "{output}" \
             1> "{log.stdout}" \

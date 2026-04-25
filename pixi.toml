@@ -24,6 +24,7 @@ minimap2 = ">=2.30,<3"
 plotly = ">=6.6.0,<7"
 pdf2svg = ">=0.2.4,<0.3"
 emboss = ">=6.6.0,<7"
+pyyaml = ">=6.0.3,<7"
 
 [feature.dotplot.dependencies]
 python = "3.9.*"
