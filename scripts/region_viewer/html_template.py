@@ -1354,9 +1354,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           const formattedEntries = formatFeatureInfoEntries("block", entry.info);
 
           if (nStats) {
-            formattedEntries.push(["Masked N (%%)", `${formatNumber(Number(nStats.n_pct), 2)}%%`]);
+            formattedEntries.push(["Total N (%%)", `${formatNumber(Number(nStats.masked_n_pct), 2)}%%`]);
+            formattedEntries.push(["Repeat/TE N (%%)", `${formatNumber(Number(nStats.repeat_masked_n_pct), 2)}%%`]);
           } else {
-            formattedEntries.push(["Masked N (%%)", "NA"]);
+            formattedEntries.push(["Total N (%%)", "NA"]);
+            formattedEntries.push(["Repeat/TE N (%%)", "NA"]);
           }
 
           html += '<div class="kv">';

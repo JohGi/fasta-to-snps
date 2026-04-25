@@ -240,6 +240,11 @@ def get_align_chunk_sentinels(_wildcards=None) -> list[Path]:
     return [ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
 
 
+def get_unmasked_align_chunk_sentinels(_wildcards=None) -> list[Path]:
+    """Return all unmasked alignment chunk completion markers after checkpoint completion."""
+    return [UNMASKED_ALIGN_DIR / f"{chunk_id}.done" for chunk_id in get_chunk_ids()]
+
+
 def get_distmat_chunk_sentinels(_wildcards=None) -> list[Path]:
     """Return all distmat chunk completion markers after checkpoint completion."""
     return [

@@ -178,8 +178,12 @@ def read_masked_block_n_stats(
 
         stats.setdefault(block_id, {})[sample] = {
             "length_bp": int(row["length_bp"]),
-            "n_count": int(row["n_count"]),
-            "n_pct": float(row["n_pct"]),
+            "unmasked_n_count": int(row["unmasked_n_count"]),
+            "unmasked_n_pct": float(row["unmasked_n_pct"]),
+            "masked_n_count": int(row["masked_n_count"]),
+            "masked_n_pct": float(row["masked_n_pct"]),
+            "repeat_masked_n_count": int(row["repeat_masked_n_count"]),
+            "repeat_masked_n_pct": float(row["repeat_masked_n_pct"]),
         }
 
     return stats
