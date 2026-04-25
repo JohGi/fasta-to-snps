@@ -51,6 +51,7 @@ class GalleryConfig:
     svg_dir: Path
     output_path: Path
     pivot: str = ""
+    title: str = ""
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,6 +79,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional pivot sample name. If provided, render a pivot layout.",
     )
+    parser.add_argument(
+        "--title",
+        default="",
+        help="Optional title for the gallery.",
+    )
     return parser.parse_args()
 
 
@@ -96,6 +102,7 @@ def build_config_from_args(args: argparse.Namespace) -> GalleryConfig:
         svg_dir=Path(args.svg_dir),
         output_path=Path(args.output),
         pivot=str(args.pivot).strip(),
+        title=str(args.title).strip(),
     )
 
 
@@ -340,6 +347,7 @@ def build_html_document(
     pivot: str,
     column_headers: list[str],
     rows: list[MatrixRow],
+    title: str = "",
 ) -> str:
     """Build the full HTML document."""
     if pivot:
@@ -349,6 +357,7 @@ def build_html_document(
 
     header_html = render_column_headers(column_headers)
     summary_label = build_summary_label(sample_names, pivot)
+    title_html = f"<h1>{html.escape(title)}</h1>" if title else ""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -550,10 +559,18 @@ def build_html_document(
       user-select: none;
       pointer-events: none;
     }}
+
+    h1 {{
+      margin: 0 0 12px 0;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+    }}
   </style>
 </head>
 <body>
   <div class="page">
+    {title_html}
     <div class="toolbar">
       <button type="button" id="zoom-out">-</button>
       <button type="button" id="zoom-in">+</button>
@@ -649,6 +666,7 @@ def main() -> None:
         pivot=config.pivot,
         column_headers=column_headers,
         rows=rows,
+        title=config.title,
     )
     write_html(config.output_path, html_document)
     LOGGER.info("Wrote gallery HTML to %s", config.output_path)

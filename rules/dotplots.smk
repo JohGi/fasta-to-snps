@@ -137,6 +137,7 @@ rule build_dotplot_gallery_html:
             --svg-dir "{DOTPLOT_SVG_DIR}" \
             --output "{output}" \
             --pivot "{params.pivot}" \
+            --title "{PROJECT_TITLE}" \
             1> "{log.stdout}" \
             2> "{log.stderr}"
         """

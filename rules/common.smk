@@ -269,6 +269,7 @@ FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 
 OUTDIR = Path(config["outdir"])
 SCRIPTS_DIR = Path(workflow.current_basedir) / "../scripts"
+PROJECT_TITLE = config.get("visualization", {}).get("title", "Project")
 
 CLEAN_FASTA_DIR = OUTDIR / "01_clean_fasta"
 MULTIFASTA_DIR = CLEAN_FASTA_DIR / "multifasta"

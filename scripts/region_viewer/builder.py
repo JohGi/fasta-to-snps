@@ -42,6 +42,7 @@ class RegionOverviewBuilder:
     masked_block_n_stats_path: Path
     masked_align_dir: Path
     gff_tracks_json_path: Path
+    title: str
     output_path: Path
 
     def run(self) -> None:
@@ -94,7 +95,7 @@ class RegionOverviewBuilder:
             gff_tracks_by_sample=gff_tracks_by_sample,
         )
 
-        html = build_html(region_data)
+        html = build_html(region_data, self.title)
         write_html(html, self.output_path)
 
     @staticmethod

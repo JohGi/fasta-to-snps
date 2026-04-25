@@ -107,14 +107,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       top: 0;
       left: 0;
       right: 0;
-      height: var(--viewer-top-ui-height);
+      height: auto;
       z-index: 10;
       display: flex;
-      justify-content: space-between;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      align-content: flex-start;
       align-items: center;
       gap: 8px;
-      padding: 8px 10px 0 10px;
+      padding: 8px 10px 8px 10px;
       pointer-events: none;
+      min-height: var(--viewer-top-ui-height);
     }
 
     .viewer-toolbar-group {
@@ -169,10 +172,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     .alignment-header {
       display: flex;
+      flex-wrap: wrap;
       align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
 
     .alignment-header h2 {
@@ -180,18 +184,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 18px;
     }
 
+    .alignment-header > div:first-child {
+      flex: 1 1 180px;
+      min-width: 0;
+    }
+
     .alignment-toolbar {
       display: flex;
-      justify-content: space-between;
+      flex-wrap: wrap;
+      justify-content: flex-start;
       align-items: center;
       gap: 8px;
-      flex: 1 1 auto;
+      row-gap: 8px;
+      flex: 1 1 260px;
+      min-width: 0;
     }
 
     .alignment-toolbar-group {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+      min-width: 0;
     }
 
     .alignment-toolbar .alignment-snp-nav-button {
@@ -326,16 +340,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       color: #111827;
     }
 
-    .info-tooltip::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      left: 50%%;
-      bottom: calc(100%% + 8px);
-      transform: translateX(-50%%);
-      z-index: 50;
+    .floating-tooltip {
+      position: fixed;
+      z-index: 9999;
       display: none;
-      width: max-content;
-      max-width: 280px;
+      max-width: min(320px, calc(100vw - 24px));
       padding: 8px 10px;
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -346,10 +355,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-weight: normal;
       line-height: 1.35;
       white-space: pre-line;
-    }
-
-    .info-tooltip:hover::after {
-      display: block;
+      overflow-wrap: break-word;
+      pointer-events: none;
     }
 
     .sample-card {
@@ -442,7 +449,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="content-row" id="content-row">
       <div class="viewer-column" id="viewer-column">
         <section id="info-panel" class="info-panel">
-          <h2>Region viewer</h2>
+          <h2>%(region_viewer_title)s</h2>
           <p class="hint">
             Overview of collinear blocks detected across samples in the selected region, with SNPs retained after filtering.
           </p>
@@ -504,6 +511,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </aside>
     </div>
   </div>
+  <div id="floating-tooltip" class="floating-tooltip"></div>
 
   <script>
     const REGION_DATA = %(region_data)s;
@@ -805,7 +813,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         0
       );
 
-      return CONFIG.viewerTopUiHeight
+      return getViewerToolbarHeight()
         + CONFIG.topMargin
         + REGION_VIEWER.axisToFirstSampleGap
         + sampleHeights
@@ -823,7 +831,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         0
       );
 
-      return CONFIG.viewerTopUiHeight
+      return getViewerToolbarHeight()
         + CONFIG.topMargin
         + REGION_VIEWER.axisToFirstSampleGap
         + sampleHeights
@@ -843,18 +851,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       let x = getLeftMargin();
       const y = getGffLegendY() + GFF_LEGEND.topPadding;
-
-      layer.add(new Konva.Text({
-        x,
-        y,
-        text: "Gene tracks:",
-        fontSize: GFF_LEGEND.fontSize,
-        fontStyle: "bold",
-        fill: "#374151",
-        listening: false
-      }));
-
-      x += estimateTextWidth("Gene tracks:", GFF_LEGEND.fontSize) + 14;
 
       for (const trackName of trackNames) {
         const color = getGffTrackColor(trackName);
@@ -1580,7 +1576,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function computePanelTop(panelIndex) {
-      let panelTop = CONFIG.viewerTopUiHeight
+      let panelTop = getViewerToolbarHeight()
         + CONFIG.topMargin
         + REGION_VIEWER.axisToFirstSampleGap;
 
@@ -1688,7 +1684,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function drawGlobalAxis(layer) {
       const x0 = getLeftMargin();
       const x1 = getVisibleBiologicalEndX();
-      const axisY = CONFIG.viewerTopUiHeight + 24;
+      const axisY = getViewerToolbarHeight() + 24;
 
       const axis = new Konva.Line({
         points: [x0, axisY, x1, axisY],
@@ -3276,6 +3272,66 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       sidebar.style.maxHeight = `${height}px`;
     }
 
+    function setupFloatingTooltips() {
+      const tooltip = document.getElementById("floating-tooltip");
+
+      if (!tooltip) {
+        return;
+      }
+
+      document.addEventListener("mouseover", (event) => {
+        const trigger = event.target.closest(".info-tooltip");
+
+        if (!trigger) {
+          return;
+        }
+
+        tooltip.textContent = trigger.dataset.tooltip || "";
+        tooltip.style.display = "block";
+
+        const triggerRect = trigger.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const margin = 12;
+
+        let left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+        let top = triggerRect.top - tooltipRect.height - 8;
+
+        left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+
+        if (top < margin) {
+          top = triggerRect.bottom + 8;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      });
+
+      document.addEventListener("mouseout", (event) => {
+        const trigger = event.target.closest(".info-tooltip");
+
+        if (!trigger) {
+          return;
+        }
+
+        tooltip.style.display = "none";
+      });
+    }
+
+    setupFloatingTooltips();
+
+    function getViewerToolbarHeight() {
+      const toolbar = document.querySelector(".viewer-toolbar");
+
+      if (!toolbar) {
+        return CONFIG.viewerTopUiHeight;
+      }
+
+      return Math.max(
+        CONFIG.viewerTopUiHeight,
+        Math.ceil(toolbar.getBoundingClientRect().height) + 8
+      );
+    }
+
     stage.on("pointerdown", (event) => {
       if (event.target !== stage) {
         return;
@@ -3461,12 +3517,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def build_html(region_data: dict[str, object]) -> str:
+def build_html(region_data: dict[str, object], region_viewer_title: str = "Region viewer") -> str:
     """Render the final HTML document."""
     config = build_config_payload()
     return HTML_TEMPLATE % {
         "region_data": json.dumps(region_data),
         "config": json.dumps(config),
+        "region_viewer_title": region_viewer_title,
         "sidebar_width": SIDEBAR_WIDTH,
         "viewer_top_ui_height": config["viewerTopUiHeight"],
         "sidebar_min_width": SIDEBAR_MIN_WIDTH,
