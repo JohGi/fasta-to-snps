@@ -13,8 +13,10 @@ from attrs import define, field
 
 from .html_template import build_html
 from .io import (
+    count_unique_snps,
     parse_kimura2p_distmat_dir,
     parse_mash_matrix,
+    parse_snps,
     read_block_alignments,
     read_blocks,
     read_fasta_lengths,
@@ -22,7 +24,7 @@ from .io import (
     read_gff_tracks_json,
     read_masked_block_n_stats,
     read_samples,
-    read_snps,
+    read_snp_long,
     read_summary_stats,
     write_html,
 )
@@ -94,9 +96,11 @@ class RegionOverviewBuilder:
             align_dir=self.masked_align_dir,
             block_ids=block_ids,
         )
-        snps_by_sample = read_snps(self.snp_long_path)
+        snp_long = read_snp_long(self.snp_long_path)
+        snps_by_sample = parse_snps(snp_long)
 
         summary_stats = read_summary_stats(self.summary_stats_json_path)
+        summary_stats.setdefault("global", {})["n_snps_kept"] = count_unique_snps(snp_long)
         mash_matrix = parse_mash_matrix(
             path=self.mash_matrix_path,
             sample_order=sample_order,

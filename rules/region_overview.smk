@@ -57,3 +57,63 @@ rule generate_region_viewer:
             1> "{log.stdout}" \
             2> "{log.stderr}"
         """
+
+rule filter_snp_long_by_selected_markers:
+    input:
+        snp_long=SNP_POS_LONG_TSV,
+        selected_markers=SELECTED_MARKERS_TSV,
+    output:
+        SELECTED_SNP_LONG
+    log:
+        stdout=LOG_DIR / "filter_snp_long_by_selected_markers.stdout",
+        stderr=LOG_DIR / "filter_snp_long_by_selected_markers.stderr",
+    shell:
+        r"""
+        python3 "{SCRIPTS_DIR}/filter_snp_long_by_marker_subset.py" \
+            --snp-long "{input.snp_long}" \
+            --selected-markers "{input.selected_markers}" \
+            --output "{output}" \
+            1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
+
+rule generate_region_viewer_selected_snps:
+    input:
+        samples_tsv=SAMPLES_TSV,
+        block_coords_tsv=BLOCK_COORDINATES_TSV,
+        snp_long=SELECTED_SNP_LONG,
+        fastas=CLEAN_FASTAS,
+        stats_json=SUMMARY_STATS_JSON,
+        mash_dists_tsv=MASHTREE_MATRIX,
+        n_stats_tsv=MASKED_BLOCK_N_STATS_TSV,
+        align_sentinels=get_align_chunk_sentinels,
+        distmat_sentinels=get_distmat_chunk_sentinels,
+        gff_tracks_json=GFF_TRACKS_JSON,
+    output:
+        REGION_TRACK_SELECTED_HTML
+    params:
+        title=get_selected_region_viewer_title,
+    log:
+        stdout=LOG_DIR / "generate_region_viewer_selected_snps.stdout",
+        stderr=LOG_DIR / "generate_region_viewer_selected_snps.stderr",
+    shell:
+        r"""
+        mkdir -p "{REGION_TRACK_DIR}" "$(dirname "{log.stdout}")"
+        python3 "{SCRIPTS_DIR}/generate_region_viewer.py" \
+            --samples-tsv "{input.samples_tsv}" \
+            --block-coords-tsv "{input.block_coords_tsv}" \
+            --snp-long "{input.snp_long}" \
+            --fasta-dir "{CLEAN_FASTA_DIR}" \
+            --summary-stats-json "{input.stats_json}" \
+            --mash-matrix "{input.mash_dists_tsv}" \
+            --kimura2p-distmat-dir "{KIMURA2P_DISTMAT_MATRIX_DIR}" \
+            --masked-align-dir "{ALIGN_DIR}" \
+            --masked-block-n-stats "{input.n_stats_tsv}" \
+            --gff-tracks-json "{input.gff_tracks_json}" \
+            --config-yaml "{workflow.configfiles[0]}" \
+            --title "{params.title}" \
+            --output "{output}" \
+            1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """

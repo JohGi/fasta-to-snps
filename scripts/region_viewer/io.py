@@ -127,8 +127,8 @@ def read_blocks(path: Path) -> dict[str, list[BlockFeature]]:
     return blocks_by_sample
 
 
-def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
-    """Read SNPs from the long-format SNP TSV."""
+def read_snp_long(path: Path) -> pl.DataFrame:
+    """Load and validate the long-format SNP TSV as a polars DataFrame."""
     dataframe = pl.read_csv(path, separator="\t")
     required_columns = {
         "block_id",
@@ -142,9 +142,13 @@ def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
     missing_columns = required_columns - set(dataframe.columns)
     if missing_columns:
         raise ValueError(f"Missing required columns in SNP TSV {path}: {sorted(missing_columns)}")
+    return dataframe
 
+
+def parse_snps(snp_long: pl.DataFrame) -> dict[str, list[SnpFeature]]:
+    """Convert a long-format SNP DataFrame into per-sample SnpFeature lists."""
     snps_by_sample: dict[str, list[SnpFeature]] = {}
-    for row in dataframe.iter_rows(named=True):
+    for row in snp_long.iter_rows(named=True):
         snp = SnpFeature(
             sample=str(row["sample"]),
             block_id=str(row["block_id"]),
@@ -155,8 +159,19 @@ def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
             pos_in_source_seq=int(row["pos_in_source_seq"]),
         )
         snps_by_sample.setdefault(snp.sample, []).append(snp)
-
     return snps_by_sample
+
+
+def count_unique_snps(snp_long: pl.DataFrame) -> int:
+    """Count unique SNP markers identified by (block_id, aln_pos) pairs."""
+    if snp_long.is_empty():
+        return 0
+    return snp_long.select(["block_id", "aln_pos"]).unique().height
+
+
+def read_snps(path: Path) -> dict[str, list[SnpFeature]]:
+    """Read SNPs from the long-format SNP TSV."""
+    return parse_snps(read_snp_long(path))
 
 
 def read_summary_stats(path: Path) -> dict[str, object]:

@@ -15,7 +15,6 @@ rule all:
         SNP_POS_LONG_TSV,
         SNP_POS_WIDE_TSV,
         DOTPLOT_SIMPLE_PDFS,
-        REGION_TRACK_HTML,
+        get_region_viewer_outputs(),
         DOTPLOT_GALLERY_HTML,
-        SUMMARY_STATS_TXT,
-        
+        SUMMARY_STATS_TXT

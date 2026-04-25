@@ -267,6 +267,19 @@ def write_lines(output_path: Path, values: list[str]) -> None:
             handle.write(f"{value}\n")
 
 
+def get_selected_region_viewer_title(_wildcards=None):
+    title = config.get("visualization", {}).get("title", "Region viewer")
+    return f"{title} - Selected SNPs"
+
+
+def get_region_viewer_outputs():
+    outputs = [REGION_TRACK_HTML]
+
+    if SELECTED_MARKERS_TSV:
+        outputs.append(REGION_TRACK_SELECTED_HTML)
+
+    return outputs
+
 SAMPLES_TSV = Path(config["samples"])
 SAMPLES = read_samples(SAMPLES_TSV)
 SAMPLE_NAMES = [record["sample"] for record in SAMPLES]
@@ -275,6 +288,7 @@ FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 OUTDIR = Path(config["outdir"])
 SCRIPTS_DIR = Path(workflow.current_basedir) / "../scripts"
 PROJECT_TITLE = config.get("visualization", {}).get("title", "Project")
+SELECTED_MARKERS_TSV = config.get("visualization", {}).get("selected_markers_tsv", "")
 
 CLEAN_FASTA_DIR = OUTDIR / "01_clean_fasta"
 MULTIFASTA_DIR = CLEAN_FASTA_DIR / "multifasta"
@@ -350,6 +364,8 @@ DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
 SUMMARY_STATS_JSON = SUMMARY_STATS_DIR / "summary_stats.json"
 SUMMARY_STATS_TXT = SUMMARY_STATS_DIR / "summary_stats.txt"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
+SELECTED_SNP_LONG = REGION_TRACK_DIR / "snp_positions_long.selected.tsv"
+REGION_TRACK_SELECTED_HTML = REGION_TRACK_DIR / "region_tracks.selected_snps.html"
 MASHTREE_MATRIX = MASH_DISTANCES_DIR / "mashtree.matrix.tsv"
 MASHTREE_TREE = MASH_DISTANCES_DIR / "mashtree.dnd"
 MASKED_BLOCK_N_STATS_TSV = BLOCK_STATS_DIR / "masked_block_n_stats.tsv"

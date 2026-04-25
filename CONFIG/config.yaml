@@ -28,6 +28,8 @@ batching:
 visualization:
   dotplot_pivot: ""
   title: "Test dataset"
+  selected_markers_tsv: "dev/integration_case_builder/dataset/selected_snps/selected_markers.tsv"
+  
 
 gff_tracks:
   Belalur:
