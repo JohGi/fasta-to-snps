@@ -61,6 +61,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/fonts-conda-ecosystem-1-0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/fonts-conda-forge-1-hc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gawk-5.3.1-hcd3d067_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ghostscript-10.07.0-hecca717_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/gitdb-4.0.12-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/gitpython-3.1.46-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gmp-6.3.0-hac33072_2.conda
@@ -161,6 +162,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pandas-2.3.3-py313h08cd8bf_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pcre2-10.47-haa7fec5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pdf2svg-0.2.4-h7d42b6c_4.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pdfcrop.pl-1.42-pl5321hd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pephubclient-0.4.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/peppy-0.40.8-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/perl-5.32.1-7_hd590300_perl5.conda
@@ -1528,6 +1530,17 @@ packages:
   license_family: GPL
   size: 1202471
   timestamp: 1726677363710
+- conda: https://conda.anaconda.org/conda-forge/linux-64/ghostscript-10.07.0-hecca717_0.conda
+  sha256: 395f18cf7b36695c2197ca7a1e6af8ae813b3a6acb7ccfaa10cbe5157465a8c2
+  md5: 4ee86164ec0e58901a4a8b4f19d9f1c7
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - libstdcxx >=14
+  license: AGPL-3.0-only
+  license_family: AGPL
+  size: 62812814
+  timestamp: 1774626200411
 - conda: https://conda.anaconda.org/conda-forge/linux-64/giflib-5.2.2-hd590300_0.conda
   sha256: aac402a8298f0c0cc528664249170372ef6b37ac39fdc92b40601a6aed1e32ff
   md5: 3bf7b9fd5a7136126e0234db4b87c8b6
@@ -3350,6 +3363,16 @@ packages:
   license_family: GPL
   size: 24713
   timestamp: 1773410268577
+- conda: https://conda.anaconda.org/conda-forge/noarch/pdfcrop.pl-1.42-pl5321hd8ed1ab_0.conda
+  sha256: cb8b10a0ff2b9536538fad73b6b32e1c425a186f82549d986d7bb72da46e5e8e
+  md5: 66f933a63c9299b03c371f93cbfbb403
+  depends:
+  - ghostscript
+  - perl >=5.32.1,<6.0a0 *_perl5
+  license: LPPL-1.3c
+  license_family: OTHER
+  size: 22394
+  timestamp: 1681595846314
 - conda: https://conda.anaconda.org/conda-forge/noarch/pephubclient-0.4.4-pyhd8ed1ab_1.conda
   sha256: fe53097b62d73a991a9233659d47aac28e973e055d931ae5bfbcce4d824c03ee
   md5: 08d92912686d87b05d53ce04f00142c8

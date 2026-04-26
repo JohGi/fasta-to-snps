@@ -105,7 +105,8 @@ rule convert_pairwise_dotplot_pdf_to_svg:
     input:
         DOTPLOT_PDF_DIR / "{pair_id}.simple.pdf"
     output:
-        DOTPLOT_SVG_DIR / "{pair_id}.simple.svg"
+        cropped_pdf=DOTPLOT_PDF_DIR / "{pair_id}.simple.cropped.pdf",
+        svg=DOTPLOT_SVG_DIR / "{pair_id}.simple.svg"
     benchmark:
         BENCHMARK_DIR / "convert_pairwise_dotplot_pdf_to_svg" / "{pair_id}.tsv"
     log:
@@ -113,9 +114,9 @@ rule convert_pairwise_dotplot_pdf_to_svg:
     shell:
         r"""
         mkdir -p "{DOTPLOT_SVG_DIR}" "$(dirname "{log}")"
-        pdf2svg "{input}" "{output}" 2> "{log}"
+        pdfcrop.pl "{input}" "{output.cropped_pdf}" 2> "{log}"
+        pdf2svg "{output.cropped_pdf}" "{output.svg}" 2>> "{log}"
         """
-
 
 rule build_dotplot_gallery_html:
     input:

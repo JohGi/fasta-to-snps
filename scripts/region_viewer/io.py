@@ -192,7 +192,7 @@ def read_masked_block_n_stats(
         sample = str(row["sample"])
 
         stats.setdefault(block_id, {})[sample] = {
-            "length_bp": int(row["length_bp"]),
+            "length_bp": int(row["masked_length_bp"]),
             "unmasked_n_count": int(row["unmasked_n_count"]),
             "unmasked_n_pct": float(row["unmasked_n_pct"]),
             "masked_n_count": int(row["masked_n_count"]),

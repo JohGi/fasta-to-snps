@@ -429,7 +429,8 @@ def build_html_document(
     }}
 
     .viewport {{
-      overflow: auto;
+      overflow-x: auto;
+      overflow-y: hidden;
       border: 1px solid var(--border);
       border-radius: 18px;
       background: #f7f7f8;
@@ -438,8 +439,9 @@ def build_html_document(
     }}
 
     .zoom-layer {{
+      position: relative;
       transform-origin: top left;
-      width: max-content;
+      height: auto;
     }}
 
     .gallery-grid {{
@@ -448,6 +450,7 @@ def build_html_document(
       gap: var(--grid-gap);
       align-items: stretch;
       min-width: max-content;
+      transform-origin: top left;
     }}
 
     .corner-cell,
@@ -542,7 +545,6 @@ def build_html_document(
     .plot-frame {{
       width: 100%;
       min-height: calc(var(--plot-min-height) - 20px);
-      overflow: hidden;
       border-radius: 12px;
       background: #ffffff;
       display: flex;
@@ -552,10 +554,8 @@ def build_html_document(
 
     .plot-frame img {{
       display: block;
-      width: 108%;
+      width: 100%;
       height: auto;
-      transform: translate(-2.5%, -1.5%);
-      transform-origin: center center;
       user-select: none;
       pointer-events: none;
     }}
@@ -580,7 +580,7 @@ def build_html_document(
 
     <div class="viewport">
       <div class="zoom-layer" id="zoom-layer">
-        <div class="gallery-grid">
+        <div class="gallery-grid" id="gallery-grid">
           {header_html}
           {render_rows(rows)}
         </div>
@@ -590,18 +590,25 @@ def build_html_document(
 
   <script>
     const zoomLayer = document.getElementById("zoom-layer");
+    const galleryGrid = document.getElementById("gallery-grid");
     const zoomInButton = document.getElementById("zoom-in");
     const zoomOutButton = document.getElementById("zoom-out");
     const zoomResetButton = document.getElementById("zoom-reset");
 
-    const defaultZoomLevel = 0.3;
+    const defaultZoomLevel = 0.4;
     let zoomLevel = defaultZoomLevel;
     const zoomStep = 0.1;
     const zoomMin = 0.1;
     const zoomMax = 4.0;
 
     function applyZoom() {{
-      zoomLayer.style.transform = `scale(${{zoomLevel}})`;
+      galleryGrid.style.transform = `scale(${{zoomLevel}})`;
+
+      const rawWidth = galleryGrid.scrollWidth;
+      const rawHeight = galleryGrid.scrollHeight;
+
+      zoomLayer.style.width = `${{rawWidth * zoomLevel}}px`;
+      zoomLayer.style.height = `${{rawHeight * zoomLevel}}px`;
     }}
 
     function zoomIn() {{
@@ -619,11 +626,21 @@ def build_html_document(
       applyZoom();
     }}
 
+    function applyZoomAfterLayout() {{
+      requestAnimationFrame(applyZoom);
+    }}
+
     zoomInButton.addEventListener("click", zoomIn);
     zoomOutButton.addEventListener("click", zoomOut);
     zoomResetButton.addEventListener("click", zoomReset);
+    window.addEventListener("resize", applyZoomAfterLayout);
+    window.addEventListener("load", applyZoomAfterLayout);
 
-    applyZoom();
+    document.querySelectorAll(".plot-frame img").forEach((image) => {{
+      image.addEventListener("load", applyZoomAfterLayout);
+    }});
+
+    applyZoomAfterLayout();
   </script>
 </body>
 </html>

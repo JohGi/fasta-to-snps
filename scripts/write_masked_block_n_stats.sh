@@ -63,7 +63,7 @@ get_python_script_path() {
 
 write_header() {
     local output_path="$1"
-    printf "block_id\tsample\tlength_bp\tunmasked_n_count\tunmasked_n_pct\tmasked_n_count\tmasked_n_pct\trepeat_masked_n_count\trepeat_masked_n_pct\n" \
+    printf "block_id\tsample\tmasked_length_bp\tunmasked_length_bp\tunmasked_n_count\tunmasked_n_pct\tmasked_n_count\tmasked_n_pct\trepeat_masked_n_count\trepeat_masked_n_pct\n" \
         > "$output_path"
 }
 

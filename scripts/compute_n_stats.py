@@ -85,8 +85,7 @@ def compute_pct(count: int, length: int) -> float:
 def build_rows(masked_path: Path, unmasked_path: Path) -> list[str]:
     """Build TSV rows comparing masked and unmasked alignments for one block.
 
-    Raises ValueError if a sample is missing from the unmasked alignment or if
-    sequence lengths differ between the two alignments for the same block/sample.
+    Raises ValueError if a sample is missing from the unmasked alignment.
     """
     block_id = extract_block_id(masked_path)
     masked_seqs = parse_fasta(masked_path)
@@ -104,25 +103,19 @@ def build_rows(masked_path: Path, unmasked_path: Path) -> list[str]:
         masked_seq = masked_seqs[sample]
         unmasked_seq = unmasked_seqs[sample]
 
-        if len(masked_seq) != len(unmasked_seq):
-            raise ValueError(
-                f"Block {block_id}, sample '{sample}': masked alignment length "
-                f"({len(masked_seq)}) differs from unmasked alignment length "
-                f"({len(unmasked_seq)}). "
-                f"Masked: {masked_path}, Unmasked: {unmasked_path}"
-            )
+        unmasked_length_bp = len(unmasked_seq)
+        masked_length_bp = len(masked_seq)
 
-        length_bp = len(masked_seq)
         unmasked_n_count = count_n(unmasked_seq)
         masked_n_count = count_n(masked_seq)
         repeat_masked_n_count = max(0, masked_n_count - unmasked_n_count)
 
-        unmasked_n_pct = compute_pct(unmasked_n_count, length_bp)
-        masked_n_pct = compute_pct(masked_n_count, length_bp)
-        repeat_masked_n_pct = compute_pct(repeat_masked_n_count, length_bp)
+        unmasked_n_pct = compute_pct(unmasked_n_count, unmasked_length_bp)
+        masked_n_pct = compute_pct(masked_n_count, masked_length_bp)
+        repeat_masked_n_pct = compute_pct(repeat_masked_n_count, masked_length_bp)
 
         rows.append(
-            f"{block_id}\t{sample}\t{length_bp}"
+            f"{block_id}\t{sample}\t{masked_length_bp}\t{unmasked_length_bp}"
             f"\t{unmasked_n_count}\t{unmasked_n_pct:.2f}"
             f"\t{masked_n_count}\t{masked_n_pct:.2f}"
             f"\t{repeat_masked_n_count}\t{repeat_masked_n_pct:.2f}"
