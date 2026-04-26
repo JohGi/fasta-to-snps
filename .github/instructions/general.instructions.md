@@ -69,6 +69,7 @@ When reviewing code I propose to you:
 - **No Hardcoded Paths**: Never hardcode input/output file names in scripts
 - **Arguments Over Magic Strings**: Accept all file paths as command-line arguments or configuration parameters
 - **Flexibility**: Ensure scripts can be reused across different data locations
+- **Line Endings**: Always use LF (`\n`) — never CRLF. When writing files via Python on Windows, always pass `newline='\n'` to `open()`
 
 ## Git Commit Conventions
 

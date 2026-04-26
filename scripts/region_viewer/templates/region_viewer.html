@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Region Overview</title>
+  <script src="https://unpkg.com/konva@10/konva.min.js"></script>
+  <style>
+{{ CSS }}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="content-row" id="content-row">
+      <div class="viewer-column" id="viewer-column">
+        <section id="info-panel" class="info-panel">
+          <h2>{{ TITLE }}</h2>
+          <p class="hint">
+            Overview of collinear blocks detected across samples in the selected region, with SNPs retained after filtering.
+          </p>
+          <p class="hint">
+            Hover a feature to highlight it across samples.
+          </p>
+        </section>
+
+        <div class="viewer-wrapper">
+          <div class="viewer-toolbar">
+            <div class="viewer-toolbar-group">
+              <button id="feature-prev" class="feature-nav-button hidden" type="button">Previous</button>
+              <button id="feature-next" class="feature-nav-button hidden" type="button">Next</button>
+            </div>
+            <div class="viewer-toolbar-group">
+              <button id="pan-left" type="button">←</button>
+              <button id="pan-right" type="button">→</button>
+              <button id="zoom-out" type="button">−</button>
+              <button id="zoom-in" type="button">+</button>
+              <button id="zoom-reset" type="button">Reset</button>
+            </div>
+          </div>
+          <div id="viewer" class="viewer" tabindex="0"></div>
+        </div>
+                <section id="alignment-panel" class="alignment-panel hidden">
+          <div class="alignment-header">
+            <div>
+              <h2>
+                Block alignment
+                <span class="info-tooltip" data-tooltip="Displayed alignments are soft-masked.
+                Asterisks mark SNPs kept after filtering.">Info</span>
+              </h2>
+              <p id="alignment-subtitle" class="hint">Hover or pin a block to display its alignment.</p>
+            </div>
+            <div class="alignment-toolbar">
+              <div class="alignment-toolbar-group">
+                <button id="alignment-snp-prev" class="alignment-snp-nav-button" type="button">Previous SNP</button>
+                <button id="alignment-snp-next" class="alignment-snp-nav-button" type="button">Next SNP</button>
+              </div>
+              <div class="alignment-toolbar-group">
+                <button id="alignment-pan-left" type="button">←</button>
+                <button id="alignment-pan-right" type="button">→</button>
+                <button id="alignment-zoom-out" type="button">−</button>
+                <button id="alignment-zoom-in" type="button">+</button>
+                <button id="alignment-zoom-reset" type="button">Reset</button>
+              </div>
+            </div>
+          </div>
+          <div id="alignment-viewer" class="alignment-stage-container"></div>
+        </section>
+      </div>
+
+      <div id="column-resizer" class="column-resizer" aria-label="Resize sidebar"></div>
+      <div class="right-column" id="right-column">
+        <aside id="analysis-settings-sidebar" class="sidebar-panel">
+          <div class="sidebar-header">
+            <h2>Analysis settings</h2>
+          </div>
+          <div id="analysis-settings-content"></div>
+        </aside>
+        <aside id="sidebar" class="sidebar-panel sidebar">
+          <div class="sidebar-header">
+            <h2>Region overview</h2>
+          </div>
+          <p class="hint">Loading region summary.</p>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <div id="floating-tooltip" class="floating-tooltip"></div>
+
+  <script>
+{{ JS }}
+  </script>
+</body>
+</html>
