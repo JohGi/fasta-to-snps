@@ -90,7 +90,8 @@ const state = {
   alignmentDragStartPointerX: 0,
   alignmentDragStartScrollX: 0,
   alignmentScrollbarDragOffsetX: 0,
-  alignmentFocusedSnpColumn: null
+  alignmentFocusedSnpColumn: null,
+  activeKeyboardViewer: "region"
 };
 
 function buildFeatureGroups(data) {
@@ -1055,7 +1056,7 @@ function attachInteraction(node, featureType, featureId) {
     if (state.suppressHover) {
       return;
     }
-    document.body.style.cursor = "pointer";
+    setViewerCursor("pointer");
     setHoveredFeature(featureType, featureId);
   });
 
@@ -1063,7 +1064,7 @@ function attachInteraction(node, featureType, featureId) {
     if (state.suppressHover) {
       return;
     }
-    document.body.style.cursor = "default";
+    setViewerCursor("");
     clearHoveredFeature();
   });
 
@@ -1075,6 +1076,29 @@ function attachInteraction(node, featureType, featureId) {
 
 function getViewerElement() {
   return document.getElementById("viewer");
+}
+
+function setBodyCursor(cursor) {
+  document.body.style.cursor = cursor;
+}
+
+function setViewerCursor(cursor) {
+  const viewerElement = getViewerElement();
+  if (viewerElement) {
+    viewerElement.style.cursor = cursor;
+  }
+}
+
+function setAlignmentCursor(cursor) {
+  const el = document.getElementById("alignment-viewer");
+  if (el) {
+    el.style.cursor = cursor;
+  }
+}
+
+function resetViewerCursors() {
+  setViewerCursor("");
+  setAlignmentCursor("");
 }
 
 function getStageWidth() {
@@ -1771,13 +1795,13 @@ function drawScrollbar(layer) {
 
   thumb.on("mouseenter", () => {
     if (!state.isDraggingViewport && !state.isDraggingScrollbar) {
-      document.body.style.cursor = "grab";
+      setViewerCursor("grab");
     }
   });
 
   thumb.on("mouseleave", () => {
     if (!state.isDraggingViewport && !state.isDraggingScrollbar) {
-      document.body.style.cursor = "default";
+      setViewerCursor("");
     }
   });
 
@@ -1789,7 +1813,7 @@ function drawScrollbar(layer) {
     event.cancelBubble = true;
     state.isDraggingScrollbar = true;
     state.suppressHover = true;
-    document.body.style.cursor = "grabbing";
+    setBodyCursor("grabbing");
 
     const pointer = stage.getPointerPosition();
     state.scrollbarDragOffsetX = pointer.x - metrics.thumbX;
@@ -2508,7 +2532,7 @@ function drawAlignmentScrollbar(layer, alignmentLength, sampleCount) {
 
     event.cancelBubble = true;
     state.isDraggingAlignmentScrollbar = true;
-    document.body.style.cursor = "grabbing";
+    setBodyCursor("grabbing");
 
     const pointer = alignmentStage.getPointerPosition();
     state.alignmentScrollbarDragOffsetX = pointer.x - metrics.thumbX;
@@ -2724,7 +2748,7 @@ function startAlignmentViewportDrag(pointerX) {
   state.isDraggingAlignmentViewport = true;
   state.alignmentDragStartPointerX = pointerX;
   state.alignmentDragStartScrollX = state.alignmentScrollX;
-  document.body.style.cursor = "grabbing";
+  setBodyCursor("grabbing");
 }
 
 function updateAlignmentViewportDrag(pointerX) {
@@ -2761,7 +2785,8 @@ function stopAlignmentDrag() {
   state.alignmentScrollbarDragOffsetX = 0;
 
   if (wasDragging) {
-    document.body.style.cursor = "default";
+    setBodyCursor("default");
+    setAlignmentCursor("");
   }
 }
 
@@ -2774,7 +2799,7 @@ function startViewportDrag(pointerX) {
   state.suppressHover = true;
   state.dragStartPointerX = pointerX;
   state.dragStartScrollX = state.scrollX;
-  document.body.style.cursor = "grabbing";
+  setBodyCursor("grabbing");
 }
 
 function updateViewportDrag(pointerX) {
@@ -2797,7 +2822,8 @@ function stopDrag() {
 
   if (wasDragging) {
     state.suppressHover = false;
-    document.body.style.cursor = "default";
+    setBodyCursor("default");
+    setViewerCursor("");
   }
 }
 
@@ -2815,7 +2841,7 @@ function setupColumnResizer() {
   resizer.addEventListener("pointerdown", (event) => {
     isResizing = true;
     resizer.classList.add("is-dragging");
-    document.body.style.cursor = "col-resize";
+    setBodyCursor("col-resize");
     resizer.setPointerCapture(event.pointerId);
     event.preventDefault();
   });
@@ -2848,7 +2874,7 @@ function setupColumnResizer() {
 
     isResizing = false;
     resizer.classList.remove("is-dragging");
-    document.body.style.cursor = "default";
+    setBodyCursor("default");
 
     if (resizer.hasPointerCapture(event.pointerId)) {
       resizer.releasePointerCapture(event.pointerId);
@@ -2968,14 +2994,17 @@ stage.on("pointermove", () => {
 
   const scrollbarY = getScrollbarY();
   if (pointer.y < scrollbarY && getMaxScrollX() > 0) {
-    document.body.style.cursor = "grab";
+    setViewerCursor("grab");
   } else {
-    document.body.style.cursor = "default";
+    setViewerCursor("");
   }
 });
 
 stage.on("pointerup", stopDrag);
-stage.on("pointerleave", stopDrag);
+stage.on("pointerleave", () => {
+  stopDrag();
+  setViewerCursor("");
+});
 
 alignmentStage.on("pointerdown", (event) => {
   if (event.target !== alignmentStage) {
@@ -3015,14 +3044,17 @@ alignmentStage.on("pointermove", () => {
   }
 
   if (state.activeAlignmentBlockId && getAlignmentData(state.activeAlignmentBlockId)) {
-    document.body.style.cursor = "grab";
+    setAlignmentCursor("grab");
   } else {
-    document.body.style.cursor = "default";
+    setAlignmentCursor("");
   }
 });
 
 alignmentStage.on("pointerup", stopAlignmentDrag);
-alignmentStage.on("pointerleave", stopAlignmentDrag);
+alignmentStage.on("pointerleave", () => {
+  stopAlignmentDrag();
+  setAlignmentCursor("");
+});
 
 state.featureGroups = buildFeatureGroups(REGION_DATA);
 renderAnalysisSettings();
@@ -3031,6 +3063,7 @@ state.zoomX = getInitialZoomX();
 state.scrollX = 0;
 redrawStage();
 setupColumnResizer();
+setupWheelScrolling();
 redrawAlignmentViewer();
 syncSidebarHeightToViewerColumn();
 
@@ -3073,13 +3106,76 @@ document.getElementById("zoom-reset").addEventListener("click", () => {
   redrawStage();
 });
 
+function getWheelDeltaX(event) {
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+    return event.deltaX;
+  }
+
+  if (event.shiftKey) {
+    return event.deltaY;
+  }
+
+  return 0;
+}
+
+function setActiveKeyboardViewer(viewerName) {
+  state.activeKeyboardViewer = viewerName;
+}
+
+function setupWheelScrolling() {
+  const viewerElement = document.getElementById("viewer");
+  const alignmentElement = document.getElementById("alignment-viewer");
+
+  viewerElement.addEventListener("wheel", (event) => {
+    const deltaX = getWheelDeltaX(event);
+
+    if (deltaX === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    state.scrollX = clampScrollX(state.scrollX + deltaX);
+    redrawStage();
+  }, { passive: false });
+
+  alignmentElement.addEventListener("wheel", (event) => {
+    const deltaX = getWheelDeltaX(event);
+
+    if (deltaX === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const alignmentData = getAlignmentData(state.activeAlignmentBlockId);
+    const alignmentLength = getAlignmentLength(alignmentData);
+    state.alignmentScrollX = clampAlignmentScrollX(
+      state.alignmentScrollX + deltaX,
+      alignmentLength
+    );
+    redrawAlignmentViewer();
+  }, { passive: false });
+
+  viewerElement.addEventListener("pointerdown", () => {
+    setActiveKeyboardViewer("region");
+  });
+
+  alignmentElement.addEventListener("pointerdown", () => {
+    setActiveKeyboardViewer("alignment");
+  });
+}
+
 window.addEventListener("keydown", (event) => {
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    moveByViewportFraction(-1, 0.1);
-  } else if (event.key === "ArrowRight") {
-    event.preventDefault();
-    moveByViewportFraction(1, 0.1);
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+    return;
+  }
+
+  event.preventDefault();
+  const direction = event.key === "ArrowLeft" ? -1 : 1;
+
+  if (state.activeKeyboardViewer === "alignment") {
+    moveAlignmentByViewportFraction(direction);
+  } else {
+    moveByViewportFraction(direction, 0.1);
   }
 });
 
