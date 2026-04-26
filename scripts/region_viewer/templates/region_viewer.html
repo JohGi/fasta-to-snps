@@ -16,7 +16,7 @@
         <section id="info-panel" class="info-panel">
           <h2>{{ TITLE }}</h2>
           <p class="hint">
-            Overview of collinear blocks detected across samples in the selected region, with SNPs retained after filtering.
+            Overview of locally collinear blocks identified across samples in the selected region, with SNPs retained after filtering.
           </p>
           <p class="hint">
             Hover a feature to highlight it across samples.
@@ -44,7 +44,7 @@
             <div>
               <h2>
                 Block alignment
-                <span class="info-tooltip" data-tooltip="Displayed alignments are soft-masked.
+                <span class="info-tooltip" data-tooltip="Alignments are hard-masked (repeats/TEs replaced by Ns prior to alignment using RepeatMasker).
                 Asterisks mark SNPs kept after filtering.">Info</span>
               </h2>
               <p id="alignment-subtitle" class="hint">Hover or pin a block to display its alignment.</p>

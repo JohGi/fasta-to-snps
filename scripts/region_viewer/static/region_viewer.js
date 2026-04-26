@@ -522,7 +522,7 @@ function matrixCellColor(value, minValue, maxValue, isDiagonal) {
 
 function getDistanceMatrixTooltip(matrix) {
   if (matrix.source === "kimura2p") {
-    return `Values are substitutions per base.\nComputed from unmasked block alignments.`;
+    return `Values are substitutions per base (Kimura 2-parameter).\nComputed from unmasked block alignments using EMBOSS distmat (-nucmethod 2), scaled from per 100 bases.`;
   }
 
   return "";
@@ -935,7 +935,7 @@ function renderBlockSidebar(featureId, isPinned) {
   const matrix = REGION_DATA.kimura2p_matrices?.[blockId];
 
   let html = `
-    ${renderSidebarHeader("Collinear block", isPinned)}
+    ${renderSidebarHeader("Block", isPinned)}
     <p class="hint"><b>ID:</b> ${escapeHtml(blockId)}</p>
     <div class="sidebar-section">
       ${renderDistanceMatrix(matrix)}
@@ -2886,16 +2886,7 @@ function setupColumnResizer() {
 }
 
 function syncSidebarHeightToViewerColumn() {
-  const viewerColumn = document.getElementById("viewer-column");
-  const rightColumn = document.getElementById("right-column");
-
-  if (!viewerColumn || !rightColumn) {
-    return;
-  }
-
-  const height = viewerColumn.getBoundingClientRect().height;
-  rightColumn.style.height = `${height}px`;
-  rightColumn.style.maxHeight = `${height}px`;
+  // No-op: sidebar grows naturally with content; page scroll handles overflow.
 }
 
 function setupFloatingTooltips() {

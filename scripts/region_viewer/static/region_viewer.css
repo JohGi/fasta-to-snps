@@ -235,10 +235,7 @@ body {
 }
 
 .sidebar {
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  flex: 1 1 0;
-  min-height: 0;
+  overflow-y: visible;
 }
 
 .sidebar-header {
