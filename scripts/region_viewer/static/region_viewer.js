@@ -67,6 +67,8 @@ const SAMPLE_LABEL = {
   minLeftMargin: 80
 };
 
+const SNP_POINTER_TOLERANCE_PX = 8;
+
 const state = {
   hoveredFeatureId: null,
   hoveredFeatureType: null,
@@ -91,8 +93,42 @@ const state = {
   alignmentDragStartScrollX: 0,
   alignmentScrollbarDragOffsetX: 0,
   alignmentFocusedSnpColumn: null,
-  activeKeyboardViewer: "region"
+  activeKeyboardViewer: "region",
+  isHoveringInteractiveFeature: false
 };
+
+const derivedData = {
+  sampleOrder: [],
+  allGffTrackNames: [],
+  gffTrackColorByName: new Map(),
+  orderedBlockFeatureIds: [],
+  orderedSnpFeatureIds: [],
+  kimura2pGlobalColorScaleBounds: { min: 0, max: 1 }
+};
+
+const lastAlignmentRenderState = {
+  blockId: undefined,
+  focusedSnpColumn: undefined,
+  alignmentZoomX: NaN,
+  alignmentScrollX: NaN,
+  containerWidth: NaN
+};
+
+const lastSidebarRenderState = {
+  mode: null,
+  featureId: null,
+  featureType: null,
+  source: null,
+  isPinned: false
+};
+
+function invalidateSidebarCache() {
+  lastSidebarRenderState.mode = null;
+  lastSidebarRenderState.featureId = null;
+  lastSidebarRenderState.featureType = null;
+  lastSidebarRenderState.source = null;
+  lastSidebarRenderState.isPinned = false;
+}
 
 function buildFeatureGroups(data) {
   const groups = new Map();
@@ -147,35 +183,11 @@ function buildFeatureGroups(data) {
 }
 
 function getOrderedBlockFeatureIds() {
-  const positionsByFeatureId = new Map();
-
-  for (const sample of REGION_DATA.samples) {
-    for (const block of sample.blocks) {
-      if (!positionsByFeatureId.has(block.feature_id)) {
-        positionsByFeatureId.set(block.feature_id, Number(block.block_start_in_zone));
-      }
-    }
-  }
-
-  return [...positionsByFeatureId.entries()]
-    .sort((left, right) => left[1] - right[1])
-    .map(([featureId]) => featureId);
+  return derivedData.orderedBlockFeatureIds;
 }
 
 function getOrderedSnpFeatureIds() {
-  const positionsByFeatureId = new Map();
-
-  for (const sample of REGION_DATA.samples) {
-    for (const snp of sample.snps) {
-      if (!positionsByFeatureId.has(snp.feature_id)) {
-        positionsByFeatureId.set(snp.feature_id, Number(snp.pos_in_zone));
-      }
-    }
-  }
-
-  return [...positionsByFeatureId.entries()]
-    .sort((left, right) => left[1] - right[1])
-    .map(([featureId]) => featureId);
+  return derivedData.orderedSnpFeatureIds;
 }
 
 function getWrappedNeighbor(items, currentItem, direction) {
@@ -231,7 +243,7 @@ function escapeHtml(text) {
 }
 
 function getSampleOrder() {
-  return REGION_DATA.samples.map(sample => sample.sample);
+  return derivedData.sampleOrder;
 }
 
 function estimateTextWidth(text, fontSize) {
@@ -259,26 +271,11 @@ function getSampleGffTracks(sample) {
 }
 
 function getAllGffTrackNames() {
-  const trackNames = new Set();
-
-  for (const sample of REGION_DATA.samples) {
-    for (const track of getSampleGffTracks(sample)) {
-      trackNames.add(track.track_name);
-    }
-  }
-
-  return [...trackNames].sort();
+  return derivedData.allGffTrackNames;
 }
 
 function getGffTrackColor(trackName) {
-  const trackNames = getAllGffTrackNames();
-  const index = trackNames.indexOf(trackName);
-
-  if (index === -1) {
-    return "#9ca3af";
-  }
-
-  return GFF_TRACK.colors[index % GFF_TRACK.colors.length];
+  return derivedData.gffTrackColorByName.get(trackName) ?? "#9ca3af";
 }
 
 function getSamplePanelHeight(sample) {
@@ -411,78 +408,7 @@ function getMatrixColorScaleBounds(matrix) {
 }
 
 function getKimura2pGlobalColorScaleBounds() {
-  const entries = [];
-
-  Object.entries(REGION_DATA.kimura2p_matrices || {}).forEach(([blockId, matrix]) => {
-    if (!matrix || !matrix.values) {
-      return;
-    }
-
-    matrix.values.forEach((row, rowIndex) => {
-      row.forEach((value, colIndex) => {
-        if (colIndex <= rowIndex) {
-          return;
-        }
-
-        const numericValue = Number(value);
-        if (!Number.isNaN(numericValue)) {
-          entries.push({
-            value: numericValue,
-            blockId,
-            rowIndex,
-            colIndex,
-            rowLabel: matrix.labels?.[rowIndex],
-            colLabel: matrix.labels?.[colIndex]
-          });
-        }
-      });
-    });
-  });
-
-  if (entries.length === 0) {
-    console.warn("Kimura 2P color scale: no numeric off-diagonal values found.");
-    return { min: 0, max: 1 };
-  }
-
-  const values = entries.map(entry => entry.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-
-  const maxEntries = entries.filter(entry => entry.value === maxValue);
-  const minEntries = entries.filter(entry => entry.value === minValue);
-  const topEntries = [...entries]
-    .sort((left, right) => right.value - left.value)
-    .slice(0, 10);
-
-  const bestEntryByBlock = new Map();
-
-  for (const entry of entries) {
-    const currentBest = bestEntryByBlock.get(entry.blockId);
-
-    if (!currentBest || entry.value > currentBest.value) {
-      bestEntryByBlock.set(entry.blockId, entry);
-    }
-  }
-
-  const topUniqueBlockEntries = [...bestEntryByBlock.values()]
-    .sort((left, right) => right.value - left.value)
-    .slice(0, 10);
-
-  console.log("Kimura 2P global color scale bounds", {
-    min: minValue,
-    max: maxValue,
-    valueCount: entries.length,
-    blockCount: bestEntryByBlock.size,
-    minEntries: minEntries.slice(0, 10),
-    maxEntries: maxEntries.slice(0, 10),
-    topEntries,
-    topUniqueBlockEntries
-  });
-
-  return {
-    min: minValue,
-    max: maxValue
-  };
+  return derivedData.kimura2pGlobalColorScaleBounds;
 }
 
 function interpolateChannel(start, end, ratio) {
@@ -862,6 +788,16 @@ function applyActiveDisplay() {
 }
 
 function renderSidebarDefault() {
+  if (lastSidebarRenderState.mode === "default") {
+    return;
+  }
+
+  lastSidebarRenderState.mode = "default";
+  lastSidebarRenderState.featureId = null;
+  lastSidebarRenderState.featureType = null;
+  lastSidebarRenderState.source = null;
+  lastSidebarRenderState.isPinned = false;
+
   const sidebar = document.getElementById("sidebar");
   sidebar.innerHTML = `
     <div class="sidebar-header">
@@ -1015,6 +951,24 @@ function renderSnpSidebar(featureId, isPinned) {
 }
 
 function renderFeatureSidebar(featureType, featureId, isPinned) {
+  const source = isPinned ? "pin" : "hover";
+
+  if (
+    lastSidebarRenderState.mode === "feature" &&
+    lastSidebarRenderState.featureId === featureId &&
+    lastSidebarRenderState.featureType === featureType &&
+    lastSidebarRenderState.source === source &&
+    lastSidebarRenderState.isPinned === isPinned
+  ) {
+    return;
+  }
+
+  lastSidebarRenderState.mode = "feature";
+  lastSidebarRenderState.featureId = featureId;
+  lastSidebarRenderState.featureType = featureType;
+  lastSidebarRenderState.source = source;
+  lastSidebarRenderState.isPinned = isPinned;
+
   if (featureType === "block") {
     renderBlockSidebar(featureId, isPinned);
     return;
@@ -1044,6 +998,7 @@ function setPinnedFeature(featureType, featureId) {
 function clearPinnedFeature() {
   state.pinnedFeatureType = null;
   state.pinnedFeatureId = null;
+  invalidateSidebarCache();
   applyActiveDisplay();
 }
 
@@ -1052,26 +1007,133 @@ function reapplyDisplayIfVisible() {
 }
 
 function attachInteraction(node, featureType, featureId) {
-  node.on("mouseenter", () => {
-    if (state.suppressHover) {
-      return;
-    }
-    setViewerCursor("pointer");
-    setHoveredFeature(featureType, featureId);
-  });
+  node.setAttr("featureType", featureType);
+  node.setAttr("featureId", featureId);
+}
 
-  node.on("mouseleave", () => {
-    if (state.suppressHover) {
-      return;
+let _lastResolvedHoverKey = null;
+let _hoverIndex = [];
+
+function lowerBoundScreenX(arr, target) {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid].screenX < target) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
     }
-    setViewerCursor("");
+  }
+  return lo;
+}
+
+function lowerBoundX0(arr, target) {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid].x0 < target) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+function rebuildHoverSpatialIndex() {
+  const visibleStart = getVisibleStartBp();
+  const visibleEnd = getVisibleEndBp();
+
+  _hoverIndex = REGION_DATA.samples.map((sample, i) => {
+    const panelTop = computePanelTop(i);
+    const trackTop = panelTop + CONFIG.trackY;
+    const trackBottom = trackTop + CONFIG.trackHeight;
+
+    const snps = [];
+    for (const snp of sample.snps) {
+      if (isPositionVisible(snp.pos_in_zone, visibleStart, visibleEnd)) {
+        snps.push({ screenX: worldXToScreenX(snp.pos_in_zone), featureId: snp.feature_id });
+      }
+    }
+    snps.sort((a, b) => a.screenX - b.screenX);
+
+    const blocks = [];
+    for (const block of sample.blocks) {
+      if (intersectsRange(block.block_start_in_zone, block.block_end_in_zone, visibleStart, visibleEnd)) {
+        const x0 = worldXToScreenX(Math.max(block.block_start_in_zone, visibleStart));
+        const x1 = worldXToScreenX(Math.min(block.block_end_in_zone, visibleEnd));
+        const x1eff = Math.max(x0 + CONFIG.blockMinWidthPx, x1);
+        blocks.push({ x0, x1eff, featureId: block.feature_id });
+      }
+    }
+    blocks.sort((a, b) => a.x0 - b.x0);
+
+    return { trackTop, trackBottom, snps, blocks };
+  });
+}
+
+function resolveHoveredFeature(pointerX, pointerY) {
+  for (let i = 0; i < _hoverIndex.length; i += 1) {
+    const entry = _hoverIndex[i];
+
+    if (pointerY < entry.trackTop || pointerY > entry.trackBottom) {
+      continue;
+    }
+
+    const snpLo = lowerBoundScreenX(entry.snps, pointerX - SNP_POINTER_TOLERANCE_PX);
+    let closestSnpFeatureId = null;
+    let closestSnpDist = SNP_POINTER_TOLERANCE_PX + 1;
+
+    for (let j = snpLo; j < entry.snps.length; j += 1) {
+      const snp = entry.snps[j];
+      if (snp.screenX > pointerX + SNP_POINTER_TOLERANCE_PX) {
+        break;
+      }
+      const dist = Math.abs(pointerX - snp.screenX);
+      if (dist < closestSnpDist) {
+        closestSnpDist = dist;
+        closestSnpFeatureId = snp.featureId;
+      }
+    }
+
+    if (closestSnpFeatureId !== null) {
+      return { featureType: "snp", featureId: closestSnpFeatureId };
+    }
+
+    const blockIndex = lowerBoundX0(entry.blocks, pointerX) - 1;
+
+    if (blockIndex >= 0) {
+      const block = entry.blocks[blockIndex];
+      if (pointerX <= block.x1eff) {
+        return { featureType: "block", featureId: block.featureId };
+      }
+    }
+
+    return null;
+  }
+
+  return null;
+}
+
+function applyResolvedHover(resolved) {
+  const key = resolved ? `${resolved.featureType}:${resolved.featureId}` : null;
+
+  if (key === _lastResolvedHoverKey) {
+    return;
+  }
+
+  _lastResolvedHoverKey = key;
+
+  if (!resolved) {
+    state.isHoveringInteractiveFeature = false;
     clearHoveredFeature();
-  });
+    return;
+  }
 
-  node.on("click", (event) => {
-    event.cancelBubble = true;
-    setPinnedFeature(featureType, featureId);
-  });
+  state.isHoveringInteractiveFeature = true;
+  setHoveredFeature(resolved.featureType, resolved.featureId);
 }
 
 function getViewerElement() {
@@ -1196,7 +1258,7 @@ function moveByViewportFraction(direction, fraction = 0.1) {
   const stepBp = getVisibleBpSpan() * fraction;
   const currentStart = getVisibleStartBp();
   setVisibleStartBp(currentStart + direction * stepBp);
-  redrawStage();
+  requestStageRedraw();
 }
 
 function computePanelTop(panelIndex) {
@@ -1209,6 +1271,18 @@ function computePanelTop(panelIndex) {
   }
 
   return panelTop;
+}
+
+function isPointerOverSampleTrack(pointerY) {
+  for (let index = 0; index < REGION_DATA.samples.length; index += 1) {
+    const panelTop = computePanelTop(index);
+    const trackTop = panelTop + CONFIG.trackY;
+    const trackBottom = trackTop + CONFIG.trackHeight;
+    if (pointerY >= trackTop && pointerY <= trackBottom) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getScrollbarY() {
@@ -1681,6 +1755,7 @@ function drawSample(
   snpHighlightLayer,
   zoneOutlineLayer,
   interactionLayer,
+  snpHitboxQueue,
   sample,
   panelIndex
 ) {
@@ -1727,7 +1802,7 @@ function drawSample(
 
     snpLayer.add(base);
     snpHighlightLayer.add(highlight);
-    interactionLayer.add(hitbox);
+    snpHitboxQueue.push(hitbox);
 
     addHighlightNode(snp.feature_id, highlight, "snp");
     attachInteraction(hitbox, "snp", snp.feature_id);
@@ -1884,12 +1959,12 @@ const stage = new Konva.Stage({
   height: getMainViewerContentHeight()
 });
 
-const backgroundLayer = new Konva.Layer();
-const blockLayer = new Konva.Layer();
-const snpLayer = new Konva.Layer();
-const blockHighlightLayer = new Konva.Layer();
-const snpHighlightLayer = new Konva.Layer();
-const zoneOutlineLayer = new Konva.Layer();
+const backgroundLayer = new Konva.FastLayer();
+const blockLayer = new Konva.FastLayer();
+const snpLayer = new Konva.FastLayer();
+const blockHighlightLayer = new Konva.FastLayer();
+const snpHighlightLayer = new Konva.FastLayer();
+const zoneOutlineLayer = new Konva.FastLayer();
 const interactionLayer = new Konva.Layer();
 
 stage.add(backgroundLayer);
@@ -1900,19 +1975,99 @@ stage.add(snpHighlightLayer);
 stage.add(zoneOutlineLayer);
 stage.add(interactionLayer);
 
+function getFeatureTarget(node) {
+  if (!node || node === stage || node === interactionLayer) {
+    return null;
+  }
+  const featureType = node.getAttr("featureType");
+  const featureId = node.getAttr("featureId");
+  if (!featureType || !featureId) {
+    return null;
+  }
+  return { featureType, featureId };
+}
+
+interactionLayer.on("click", (event) => {
+  const pointer = stage.getPointerPosition();
+  if (!pointer) {
+    return;
+  }
+  const resolved = resolveHoveredFeature(pointer.x, pointer.y);
+  if (!resolved) {
+    return;
+  }
+  event.cancelBubble = true;
+  setPinnedFeature(resolved.featureType, resolved.featureId);
+});
+
 const alignmentStage = new Konva.Stage({
   container: "alignment-viewer",
   width: 1,
   height: 160
 });
 
-const alignmentBackgroundLayer = new Konva.Layer();
-const alignmentSequenceLayer = new Konva.Layer();
+const alignmentBackgroundLayer = new Konva.FastLayer();
+const alignmentSequenceLayer = new Konva.FastLayer();
 const alignmentInteractionLayer = new Konva.Layer();
 
 alignmentStage.add(alignmentBackgroundLayer);
 alignmentStage.add(alignmentSequenceLayer);
 alignmentStage.add(alignmentInteractionLayer);
+
+let _stageRedrawPending = false;
+let _alignmentRedrawPending = false;
+
+function requestStageRedraw() {
+  if (_stageRedrawPending) {
+    return;
+  }
+  _stageRedrawPending = true;
+  requestAnimationFrame(() => {
+    _stageRedrawPending = false;
+    redrawStage();
+  });
+}
+
+function requestAlignmentRedraw() {
+  if (_alignmentRedrawPending) {
+    return;
+  }
+  _alignmentRedrawPending = true;
+  requestAnimationFrame(() => {
+    _alignmentRedrawPending = false;
+    redrawAlignmentViewer();
+  });
+}
+
+function showRenderingOverlay() {
+  let overlay = document.getElementById("rendering-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "rendering-overlay";
+    overlay.textContent = "Rendering viewer\u2026";
+    overlay.style.cssText = [
+      "position:fixed",
+      "inset:0",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "background:rgba(255,255,255,0.85)",
+      "font-size:16px",
+      "color:#374151",
+      "z-index:9999",
+      "pointer-events:none"
+    ].join(";");
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = "flex";
+}
+
+function hideRenderingOverlay() {
+  const overlay = document.getElementById("rendering-overlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
 
 function redrawStage() {
   stage.width(getStageWidth());
@@ -1939,6 +2094,8 @@ function redrawStage() {
 
   drawGlobalAxis(blockLayer);
 
+  const snpHitboxQueue = [];
+
   REGION_DATA.samples.forEach((sample, index) => {
     drawSample(
       backgroundLayer,
@@ -1948,15 +2105,21 @@ function redrawStage() {
       snpHighlightLayer,
       zoneOutlineLayer,
       interactionLayer,
+      snpHitboxQueue,
       sample,
       index
     );
   });
 
+  for (const hitbox of snpHitboxQueue) {
+    interactionLayer.add(hitbox);
+  }
+
   drawGffTrackLegend(blockLayer);
   drawScrollbar(interactionLayer);
   reapplyDisplayIfVisible();
   stage.draw();
+  rebuildHoverSpatialIndex();
 }
 
 function getAlignmentContainer() {
@@ -2603,6 +2766,24 @@ function redrawAlignmentViewer() {
   const panel = getAlignmentPanel();
   const blockId = state.activeAlignmentBlockId;
   const alignmentData = getAlignmentData(blockId);
+  const containerWidth = getAlignmentStageWidth();
+
+  const stateUnchanged =
+    blockId === lastAlignmentRenderState.blockId &&
+    state.alignmentFocusedSnpColumn === lastAlignmentRenderState.focusedSnpColumn &&
+    state.alignmentZoomX === lastAlignmentRenderState.alignmentZoomX &&
+    state.alignmentScrollX === lastAlignmentRenderState.alignmentScrollX &&
+    containerWidth === lastAlignmentRenderState.containerWidth;
+
+  if (stateUnchanged) {
+    return;
+  }
+
+  lastAlignmentRenderState.blockId = blockId;
+  lastAlignmentRenderState.focusedSnpColumn = state.alignmentFocusedSnpColumn;
+  lastAlignmentRenderState.alignmentZoomX = state.alignmentZoomX;
+  lastAlignmentRenderState.alignmentScrollX = state.alignmentScrollX;
+  lastAlignmentRenderState.containerWidth = containerWidth;
 
   if (!blockId) {
     if (panel) {
@@ -2630,6 +2811,7 @@ function redrawAlignmentViewer() {
   }
 
   normalizeAlignmentScrollX(alignmentLength);
+  lastAlignmentRenderState.alignmentScrollX = state.alignmentScrollX;
 
   const subtitle = getAlignmentSubtitle();
   if (subtitle) {
@@ -2714,7 +2896,7 @@ function moveAlignmentByViewportFraction(direction) {
     alignmentLength
   );
 
-  redrawAlignmentViewer();
+  requestAlignmentRedraw();
 }
 
 function zoomAlignmentAroundCenter(nextZoom) {
@@ -2760,7 +2942,7 @@ function updateAlignmentViewportDrag(pointerX) {
     state.alignmentDragStartScrollX - deltaX,
     alignmentLength
   );
-  redrawAlignmentViewer();
+  requestAlignmentRedraw();
 }
 
 function updateAlignmentScrollbarDrag(pointerX) {
@@ -2773,7 +2955,7 @@ function updateAlignmentScrollbarDrag(pointerX) {
     alignmentLength,
     sampleCount
   );
-  redrawAlignmentViewer();
+  requestAlignmentRedraw();
 }
 
 function stopAlignmentDrag() {
@@ -2806,12 +2988,12 @@ function updateViewportDrag(pointerX) {
   const deltaX = pointerX - state.dragStartPointerX;
   const worldDelta = deltaX * (getContentWidth() / getDrawableTrackWidth());
   state.scrollX = clampScrollX(state.dragStartScrollX - worldDelta);
-  redrawStage();
+  requestStageRedraw();
 }
 
 function updateScrollbarDrag(pointerX) {
   setScrollFromThumbX(pointerX - state.scrollbarDragOffsetX);
-  redrawStage();
+  requestStageRedraw();
 }
 
 function stopDrag() {
@@ -2819,6 +3001,8 @@ function stopDrag() {
   state.isDraggingViewport = false;
   state.isDraggingScrollbar = false;
   state.scrollbarDragOffsetX = 0;
+  state.isHoveringInteractiveFeature = false;
+  _lastResolvedHoverKey = null;
 
   if (wasDragging) {
     state.suppressHover = false;
@@ -2863,7 +3047,7 @@ function setupColumnResizer() {
     rightColumn.style.width = `${sidebarWidth}px`;
 
     normalizeScrollX();
-    redrawStage();
+    requestStageRedraw();
     syncSidebarHeightToViewerColumn();
   });
 
@@ -2984,7 +3168,25 @@ stage.on("pointermove", () => {
   }
 
   const scrollbarY = getScrollbarY();
-  if (pointer.y < scrollbarY && getMaxScrollX() > 0) {
+  if (pointer.y >= scrollbarY) {
+    applyResolvedHover(null);
+    setViewerCursor("");
+    return;
+  }
+
+  if (!state.suppressHover) {
+    const resolved = resolveHoveredFeature(pointer.x, pointer.y);
+    applyResolvedHover(resolved);
+
+    if (resolved) {
+      setViewerCursor("pointer");
+      return;
+    }
+  }
+
+  if (isPointerOverSampleTrack(pointer.y)) {
+    setViewerCursor("");
+  } else if (getMaxScrollX() > 0) {
     setViewerCursor("grab");
   } else {
     setViewerCursor("");
@@ -2993,6 +3195,8 @@ stage.on("pointermove", () => {
 
 stage.on("pointerup", stopDrag);
 stage.on("pointerleave", () => {
+  _lastResolvedHoverKey = null;
+  state.isHoveringInteractiveFeature = false;
   stopDrag();
   setViewerCursor("");
 });
@@ -3047,21 +3251,99 @@ alignmentStage.on("pointerleave", () => {
   setAlignmentCursor("");
 });
 
+function initDerivedData() {
+  derivedData.sampleOrder = REGION_DATA.samples.map(function(s) {
+    return s.sample;
+  });
+
+  const trackNameSet = new Set();
+  for (const sample of REGION_DATA.samples) {
+    for (const track of (sample.gff_tracks || [])) {
+      trackNameSet.add(track.track_name);
+    }
+  }
+  derivedData.allGffTrackNames = [...trackNameSet].sort();
+  derivedData.gffTrackColorByName = new Map(
+    derivedData.allGffTrackNames.map(function(name, index) {
+      return [name, GFF_TRACK.colors[index % GFF_TRACK.colors.length]];
+    })
+  );
+
+  const blockPositions = new Map();
+  for (const sample of REGION_DATA.samples) {
+    for (const block of sample.blocks) {
+      if (!blockPositions.has(block.feature_id)) {
+        blockPositions.set(block.feature_id, Number(block.block_start_in_zone));
+      }
+    }
+  }
+  derivedData.orderedBlockFeatureIds = [...blockPositions.entries()]
+    .sort(function(a, b) { return a[1] - b[1]; })
+    .map(function(entry) { return entry[0]; });
+
+  const snpPositions = new Map();
+  for (const sample of REGION_DATA.samples) {
+    for (const snp of sample.snps) {
+      if (!snpPositions.has(snp.feature_id)) {
+        snpPositions.set(snp.feature_id, Number(snp.pos_in_zone));
+      }
+    }
+  }
+  derivedData.orderedSnpFeatureIds = [...snpPositions.entries()]
+    .sort(function(a, b) { return a[1] - b[1]; })
+    .map(function(entry) { return entry[0]; });
+
+  const k2pValues = [];
+  Object.entries(REGION_DATA.kimura2p_matrices || {}).forEach(function([blockId, matrix]) {
+    if (!matrix || !matrix.values) {
+      return;
+    }
+    matrix.values.forEach(function(row, rowIndex) {
+      row.forEach(function(value, colIndex) {
+        if (colIndex <= rowIndex) {
+          return;
+        }
+        const numericValue = Number(value);
+        if (!Number.isNaN(numericValue)) {
+          k2pValues.push(numericValue);
+        }
+      });
+    });
+  });
+
+  if (k2pValues.length === 0) {
+    console.warn("Kimura 2P color scale: no numeric off-diagonal values found.");
+    derivedData.kimura2pGlobalColorScaleBounds = { min: 0, max: 1 };
+  } else {
+    derivedData.kimura2pGlobalColorScaleBounds = {
+      min: Math.min(...k2pValues),
+      max: Math.max(...k2pValues)
+    };
+  }
+}
+
 state.featureGroups = buildFeatureGroups(REGION_DATA);
+initDerivedData();
 renderAnalysisSettings();
 renderSidebarDefault();
 state.zoomX = getInitialZoomX();
 state.scrollX = 0;
-redrawStage();
 setupColumnResizer();
 setupWheelScrolling();
-redrawAlignmentViewer();
-syncSidebarHeightToViewerColumn();
+showRenderingOverlay();
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    redrawStage();
+    redrawAlignmentViewer();
+    syncSidebarHeightToViewerColumn();
+    hideRenderingOverlay();
+  });
+});
 
 window.addEventListener("resize", () => {
   normalizeScrollX();
-  redrawStage();
-  redrawAlignmentViewer();
+  requestStageRedraw();
+  requestAlignmentRedraw();
   syncSidebarHeightToViewerColumn();
 });
 
@@ -3126,7 +3408,7 @@ function setupWheelScrolling() {
 
     event.preventDefault();
     state.scrollX = clampScrollX(state.scrollX + deltaX);
-    redrawStage();
+    requestStageRedraw();
   }, { passive: false });
 
   alignmentElement.addEventListener("wheel", (event) => {
@@ -3143,7 +3425,7 @@ function setupWheelScrolling() {
       state.alignmentScrollX + deltaX,
       alignmentLength
     );
-    redrawAlignmentViewer();
+    requestAlignmentRedraw();
   }, { passive: false });
 
   viewerElement.addEventListener("pointerdown", () => {
