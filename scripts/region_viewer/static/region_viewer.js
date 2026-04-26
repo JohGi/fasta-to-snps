@@ -75,7 +75,6 @@ const state = {
   pinnedFeatureId: null,
   pinnedFeatureType: null,
   featureGroups: new Map(),
-  highlightNodes: new Map(),
   zoomX: 1,
   scrollX: 0,
   isDraggingViewport: false,
@@ -94,7 +93,8 @@ const state = {
   alignmentScrollbarDragOffsetX: 0,
   alignmentFocusedSnpColumn: null,
   activeKeyboardViewer: "region",
-  isHoveringInteractiveFeature: false
+  isHoveringInteractiveFeature: false,
+  isApplyingPin: false
 };
 
 const derivedData = {
@@ -692,38 +692,80 @@ function formatFeatureInfoEntries(featureType, info) {
   ];
 }
 
-function clearHighlightMap() {
-  state.highlightNodes = new Map();
-}
-
-function addHighlightNode(featureId, node, featureType) {
-  if (!state.highlightNodes.has(featureId)) {
-    state.highlightNodes.set(featureId, []);
-  }
-  state.highlightNodes.get(featureId).push({
-    node: node,
-    featureType: featureType
-  });
-}
-
-function styleHighlightNode(entry, mode) {
-  const node = entry.node;
-  const featureType = entry.featureType;
-  const color = mode === "pin" ? CONFIG.pinHighlightColor : CONFIG.hoverHighlightColor;
-
-  if (featureType === "block") {
-    node.fill(color);
-  } else {
-    node.stroke(color);
-  }
-}
-
-function hideAllHighlights() {
-  for (const entries of state.highlightNodes.values()) {
-    for (const entry of entries) {
-      entry.node.visible(false);
+function getBlockHighlightGeometries(featureId) {
+  const visibleStart = getVisibleStartBp();
+  const visibleEnd = getVisibleEndBp();
+  const results = [];
+  for (let i = 0; i < REGION_DATA.samples.length; i += 1) {
+    const sample = REGION_DATA.samples[i];
+    for (const block of sample.blocks) {
+      if (block.feature_id !== featureId) {
+        continue;
+      }
+      if (!intersectsRange(block.block_start_in_zone, block.block_end_in_zone, visibleStart, visibleEnd)) {
+        continue;
+      }
+      const panelTop = computePanelTop(i);
+      const clippedStart = Math.max(block.block_start_in_zone, visibleStart);
+      const clippedEnd = Math.min(block.block_end_in_zone, visibleEnd);
+      const x0 = worldXToScreenX(clippedStart);
+      const x1 = worldXToScreenX(clippedEnd);
+      results.push({
+        x: x0,
+        y: panelTop + CONFIG.trackY,
+        width: Math.max(CONFIG.blockHighlightMinWidthPx, x1 - x0),
+        height: CONFIG.trackHeight
+      });
     }
   }
+  return results;
+}
+
+function getSnpHighlightGeometries(featureId) {
+  const visibleStart = getVisibleStartBp();
+  const visibleEnd = getVisibleEndBp();
+  const results = [];
+  for (let i = 0; i < REGION_DATA.samples.length; i += 1) {
+    const sample = REGION_DATA.samples[i];
+    for (const snp of sample.snps) {
+      if (snp.feature_id !== featureId) {
+        continue;
+      }
+      if (!isPositionVisible(snp.pos_in_zone, visibleStart, visibleEnd)) {
+        continue;
+      }
+      const panelTop = computePanelTop(i);
+      const x = worldXToScreenX(snp.pos_in_zone);
+      const y0 = getSnpY(panelTop);
+      results.push({ x, y0, y1: y0 + CONFIG.snpHeight });
+    }
+  }
+  return results;
+}
+
+function updateHighlightShapes() {
+  const displayed = getDisplayedFeature();
+  const color = displayed && displayed.source === "pin"
+    ? CONFIG.pinHighlightColor
+    : CONFIG.hoverHighlightColor;
+
+  const blockGeoms = displayed && displayed.featureType === "block"
+    ? getBlockHighlightGeometries(displayed.featureId)
+    : [];
+
+  _blockHighlightColor = color;
+  _blockHighlightGeoms = blockGeoms;
+  _blockHighlightShape.visible(blockGeoms.length > 0);
+
+  const snpGeoms = displayed && displayed.featureType === "snp"
+    ? getSnpHighlightGeometries(displayed.featureId)
+    : [];
+
+  _snpHighlightColor = color;
+  _snpHighlightGeoms = snpGeoms;
+  _snpHighlightShape.visible(snpGeoms.length > 0);
+
+  highlightLayer.batchDraw();
 }
 
 function getDisplayedFeature() {
@@ -759,23 +801,17 @@ function updateAnalysisSettingsVisibility() {
 }
 
 function applyActiveDisplay() {
-  hideAllHighlights();
   updateFeatureNavigationButtons();
+  updateHighlightShapes();
+  updateAnalysisSettingsVisibility();
 
   const displayed = getDisplayedFeature();
-  updateAnalysisSettingsVisibility();
 
   if (!displayed) {
     renderSidebarDefault();
-    updateActiveAlignmentViewer();
+    requestActiveAlignmentViewerUpdate();
     stage.batchDraw();
     return;
-  }
-
-  const entries = state.highlightNodes.get(displayed.featureId) || [];
-  for (const entry of entries) {
-    styleHighlightNode(entry, displayed.source);
-    entry.node.visible(true);
   }
 
   renderFeatureSidebar(
@@ -783,7 +819,7 @@ function applyActiveDisplay() {
     displayed.featureId,
     displayed.source === "pin"
   );
-  updateActiveAlignmentViewer();
+  requestActiveAlignmentViewerUpdate();
   stage.batchDraw();
 }
 
@@ -1006,13 +1042,31 @@ function reapplyDisplayIfVisible() {
   applyActiveDisplay();
 }
 
-function attachInteraction(node, featureType, featureId) {
-  node.setAttr("featureType", featureType);
-  node.setAttr("featureId", featureId);
-}
-
 let _lastResolvedHoverKey = null;
 let _hoverIndex = [];
+let _hoverIndexDirty = true;
+let _hoverIndexGeometryKey = "";
+
+function getHoverSpatialIndexGeometryKey() {
+  return [
+    getVisibleStartBp(),
+    getVisibleEndBp(),
+    state.zoomX,
+    state.scrollX,
+    getStageWidth(),
+    getLeftMargin(),
+    getViewerToolbarHeight()
+  ].join("|");
+}
+
+function ensureHoverSpatialIndex() {
+  const key = getHoverSpatialIndexGeometryKey();
+  if (_hoverIndexDirty || key !== _hoverIndexGeometryKey) {
+    rebuildHoverSpatialIndex();
+    _hoverIndexGeometryKey = key;
+    _hoverIndexDirty = false;
+  }
+}
 
 function lowerBoundScreenX(arr, target) {
   let lo = 0;
@@ -1075,6 +1129,8 @@ function rebuildHoverSpatialIndex() {
 }
 
 function resolveHoveredFeature(pointerX, pointerY) {
+  ensureHoverSpatialIndex();
+
   for (let i = 0; i < _hoverIndex.length; i += 1) {
     const entry = _hoverIndex[i];
 
@@ -1553,103 +1609,6 @@ function getBlockGeometry(feature, panelTop, minWidthPx) {
   };
 }
 
-function createBlockShape(feature, panelTop) {
-  const geometry = getBlockGeometry(feature, panelTop, CONFIG.blockMinWidthPx);
-
-  return new Konva.Rect({
-    x: geometry.x,
-    y: geometry.y,
-    width: geometry.width,
-    height: geometry.height,
-    fill: CONFIG.blockFill,
-    strokeWidth: 0,
-    listening: false
-  });
-}
-
-function createBlockHighlight(feature, panelTop) {
-  const visibleStart = getVisibleStartBp();
-  const visibleEnd = getVisibleEndBp();
-
-  const clippedStart = Math.max(feature.block_start_in_zone, visibleStart);
-  const clippedEnd = Math.min(feature.block_end_in_zone, visibleEnd);
-
-  const x0 = worldXToScreenX(clippedStart);
-  const x1 = worldXToScreenX(clippedEnd);
-  const y0 = panelTop + CONFIG.trackY;
-
-  return new Konva.Rect({
-    x: x0,
-    y: y0,
-    width: Math.max(CONFIG.blockHighlightMinWidthPx, x1 - x0),
-    height: CONFIG.trackHeight,
-    fill: CONFIG.pinHighlightColor,
-    strokeWidth: 0,
-    visible: false,
-    listening: false
-  });
-}
-
-function createBlockHitbox(feature, panelTop) {
-  const visibleStart = getVisibleStartBp();
-  const visibleEnd = getVisibleEndBp();
-
-  const clippedStart = Math.max(feature.block_start_in_zone, visibleStart);
-  const clippedEnd = Math.min(feature.block_end_in_zone, visibleEnd);
-
-  const x0 = worldXToScreenX(clippedStart);
-  const x1 = worldXToScreenX(clippedEnd);
-  const y0 = panelTop + CONFIG.trackY;
-
-  return new Konva.Rect({
-    x: x0,
-    y: y0,
-    width: Math.max(6, x1 - x0),
-    height: CONFIG.trackHeight,
-    fill: "rgba(0,0,0,0)"
-  });
-}
-
-function createSnpLine(feature, panelTop) {
-  const x = worldXToScreenX(feature.pos_in_zone);
-  const y0 = getSnpY(panelTop);
-  const y1 = y0 + CONFIG.snpHeight;
-
-  return new Konva.Line({
-    points: [x, y0, x, y1],
-    stroke: CONFIG.snpColor,
-    strokeWidth: CONFIG.snpMinWidthPx,
-    listening: false
-  });
-}
-
-function createSnpHitbox(feature, panelTop) {
-  const x = worldXToScreenX(feature.pos_in_zone);
-  const y0 = panelTop + CONFIG.trackY;
-
-  return new Konva.Rect({
-    x: x - 5,
-    y: y0,
-    width: 10,
-    height: CONFIG.trackHeight,
-    fill: "rgba(0,0,0,0)"
-  });
-}
-
-function createSnpHighlight(feature, panelTop) {
-  const x = worldXToScreenX(feature.pos_in_zone);
-  const y0 = getSnpY(panelTop);
-  const y1 = y0 + CONFIG.snpHeight;
-
-  return new Konva.Line({
-    points: [x, y0, x, y1],
-    stroke: CONFIG.pinHighlightColor,
-    strokeWidth: CONFIG.snpHighlightMinWidthPx,
-    visible: false,
-    listening: false
-  });
-}
-
 function getGffTrackY(panelTop, trackIndex) {
   return panelTop
     + CONFIG.trackY
@@ -1685,7 +1644,7 @@ function drawGffTrackBaseline(layer, sample, panelTop, trackIndex) {
   }));
 }
 
-function drawGffGeneFeature(layer, gene, panelTop, trackIndex, color) {
+function drawGffGeneFeature(gene, panelTop, trackIndex, color, gffRectQueues) {
   const visibleStart = getVisibleStartBp();
   const visibleEnd = getVisibleEndBp();
 
@@ -1704,19 +1663,18 @@ function drawGffGeneFeature(layer, gene, panelTop, trackIndex, color) {
   const x1 = worldXToScreenX(clippedEnd);
   const y = getGffTrackY(panelTop, trackIndex);
 
-  layer.add(new Konva.Rect({
+  if (!gffRectQueues.has(color)) {
+    gffRectQueues.set(color, []);
+  }
+  gffRectQueues.get(color).push({
     x: x0,
     y,
     width: Math.max(GFF_TRACK.minGeneWidthPx, x1 - x0),
-    height: GFF_TRACK.height,
-    fill: color,
-    opacity: 0.85,
-    cornerRadius: 2,
-    listening: false
-  }));
+    height: GFF_TRACK.height
+  });
 }
 
-function drawGffTracks(layer, sample, panelTop) {
+function drawGffTracks(layer, sample, panelTop, gffRectQueues) {
   const tracks = getSampleGffTracks(sample);
 
   tracks.forEach((track, trackIndex) => {
@@ -1725,7 +1683,7 @@ function drawGffTracks(layer, sample, panelTop) {
     drawGffTrackBaseline(layer, sample, panelTop, trackIndex);
 
     for (const gene of track.features || []) {
-      drawGffGeneFeature(layer, gene, panelTop, trackIndex, color);
+      drawGffGeneFeature(gene, panelTop, trackIndex, color, gffRectQueues);
     }
   });
 }
@@ -1748,26 +1706,22 @@ function drawSamplePanelBackground(layer, sample, panelTop) {
 }
 
 function drawSample(
-  backgroundLayer,
-  blockLayer,
-  blockHighlightLayer,
-  snpLayer,
-  snpHighlightLayer,
-  zoneOutlineLayer,
-  interactionLayer,
-  snpHitboxQueue,
+  layer,
+  blockRectQueue,
+  snpLineQueue,
+  gffRectQueues,
   sample,
   panelIndex
 ) {
   const panelTop = computePanelTop(panelIndex);
   const visibleStart = getVisibleStartBp();
   const visibleEnd = getVisibleEndBp();
-  drawSamplePanelBackground(backgroundLayer, sample, panelTop);
+  drawSamplePanelBackground(layer, sample, panelTop);
 
-  drawSampleLabel(blockLayer, panelTop, sample.sample);
-  drawSampleTrackBackground(blockLayer, sample, panelTop);
-  drawSampleOutline(zoneOutlineLayer, sample, panelTop);
-  drawGffTracks(blockLayer, sample, panelTop);
+  drawSampleLabel(layer, panelTop, sample.sample);
+  drawSampleTrackBackground(layer, sample, panelTop);
+  drawSampleOutline(layer, sample, panelTop);
+  drawGffTracks(layer, sample, panelTop, gffRectQueues);
 
   for (const block of sample.blocks) {
     if (!intersectsRange(
@@ -1779,16 +1733,7 @@ function drawSample(
       continue;
     }
 
-    const base = createBlockShape(block, panelTop);
-    const hitbox = createBlockHitbox(block, panelTop);
-    const highlight = createBlockHighlight(block, panelTop);
-
-    blockLayer.add(base);
-    blockHighlightLayer.add(highlight);
-    interactionLayer.add(hitbox);
-
-    addHighlightNode(block.feature_id, highlight, "block");
-    attachInteraction(hitbox, "block", block.feature_id);
+    blockRectQueue.push(getBlockGeometry(block, panelTop, CONFIG.blockMinWidthPx));
   }
 
   for (const snp of sample.snps) {
@@ -1796,16 +1741,9 @@ function drawSample(
       continue;
     }
 
-    const base = createSnpLine(snp, panelTop);
-    const hitbox = createSnpHitbox(snp, panelTop);
-    const highlight = createSnpHighlight(snp, panelTop);
-
-    snpLayer.add(base);
-    snpHighlightLayer.add(highlight);
-    snpHitboxQueue.push(hitbox);
-
-    addHighlightNode(snp.feature_id, highlight, "snp");
-    attachInteraction(hitbox, "snp", snp.feature_id);
+    const x = worldXToScreenX(snp.pos_in_zone);
+    const y0 = getSnpY(panelTop);
+    snpLineQueue.push({ x, y0, y1: y0 + CONFIG.snpHeight });
   }
 }
 
@@ -1959,45 +1897,72 @@ const stage = new Konva.Stage({
   height: getMainViewerContentHeight()
 });
 
-const backgroundLayer = new Konva.FastLayer();
-const blockLayer = new Konva.FastLayer();
-const snpLayer = new Konva.FastLayer();
-const blockHighlightLayer = new Konva.FastLayer();
-const snpHighlightLayer = new Konva.FastLayer();
-const zoneOutlineLayer = new Konva.FastLayer();
+const regionLayer = new Konva.Layer({ listening: false });
+const highlightLayer = new Konva.Layer({ listening: false });
 const interactionLayer = new Konva.Layer();
 
-stage.add(backgroundLayer);
-stage.add(blockLayer);
-stage.add(snpLayer);
-stage.add(blockHighlightLayer);
-stage.add(snpHighlightLayer);
-stage.add(zoneOutlineLayer);
+stage.add(regionLayer);
+stage.add(highlightLayer);
 stage.add(interactionLayer);
 
-function getFeatureTarget(node) {
-  if (!node || node === stage || node === interactionLayer) {
-    return null;
-  }
-  const featureType = node.getAttr("featureType");
-  const featureId = node.getAttr("featureId");
-  if (!featureType || !featureId) {
-    return null;
-  }
-  return { featureType, featureId };
-}
+let _blockHighlightGeoms = [];
+let _blockHighlightColor = CONFIG.hoverHighlightColor;
+const _blockHighlightShape = new Konva.Shape({
+  sceneFunc(ctx, shape) {
+    ctx.beginPath();
+    for (const r of _blockHighlightGeoms) {
+      ctx.rect(r.x, r.y, r.width, r.height);
+    }
+    ctx.fillStyle = _blockHighlightColor;
+    ctx.fill();
+  },
+  visible: false,
+  listening: false
+});
+highlightLayer.add(_blockHighlightShape);
 
-interactionLayer.on("click", (event) => {
+let _snpHighlightGeoms = [];
+let _snpHighlightColor = CONFIG.hoverHighlightColor;
+const _snpHighlightShape = new Konva.Shape({
+  sceneFunc(ctx, shape) {
+    ctx.beginPath();
+    for (const s of _snpHighlightGeoms) {
+      ctx.moveTo(s.x, s.y0);
+      ctx.lineTo(s.x, s.y1);
+    }
+    ctx.strokeStyle = _snpHighlightColor;
+    ctx.lineWidth = CONFIG.snpHighlightMinWidthPx;
+    ctx.stroke();
+  },
+  visible: false,
+  listening: false
+});
+highlightLayer.add(_snpHighlightShape);
+
+stage.on("click", (event) => {
+  if (state.isDraggingViewport || state.isDraggingScrollbar) {
+    return;
+  }
   const pointer = stage.getPointerPosition();
   if (!pointer) {
+    return;
+  }
+  const scrollbarY = getScrollbarY();
+  if (pointer.y >= scrollbarY) {
     return;
   }
   const resolved = resolveHoveredFeature(pointer.x, pointer.y);
   if (!resolved) {
     return;
   }
-  event.cancelBubble = true;
+  state.isApplyingPin = true;
+  state.hoveredFeatureType = null;
+  state.hoveredFeatureId = null;
+  _lastResolvedHoverKey = null;
   setPinnedFeature(resolved.featureType, resolved.featureId);
+  requestAnimationFrame(() => {
+    state.isApplyingPin = false;
+  });
 });
 
 const alignmentStage = new Konva.Stage({
@@ -2006,16 +1971,15 @@ const alignmentStage = new Konva.Stage({
   height: 160
 });
 
-const alignmentBackgroundLayer = new Konva.FastLayer();
-const alignmentSequenceLayer = new Konva.FastLayer();
+const alignmentDrawLayer = new Konva.Layer({ listening: false });
 const alignmentInteractionLayer = new Konva.Layer();
 
-alignmentStage.add(alignmentBackgroundLayer);
-alignmentStage.add(alignmentSequenceLayer);
+alignmentStage.add(alignmentDrawLayer);
 alignmentStage.add(alignmentInteractionLayer);
 
 let _stageRedrawPending = false;
 let _alignmentRedrawPending = false;
+let _alignmentViewerUpdatePending = false;
 
 function requestStageRedraw() {
   if (_stageRedrawPending) {
@@ -2036,6 +2000,17 @@ function requestAlignmentRedraw() {
   requestAnimationFrame(() => {
     _alignmentRedrawPending = false;
     redrawAlignmentViewer();
+  });
+}
+
+function requestActiveAlignmentViewerUpdate() {
+  if (_alignmentViewerUpdatePending) {
+    return;
+  }
+  _alignmentViewerUpdatePending = true;
+  requestAnimationFrame(() => {
+    _alignmentViewerUpdatePending = false;
+    updateActiveAlignmentViewer();
   });
 }
 
@@ -2069,21 +2044,68 @@ function hideRenderingOverlay() {
   }
 }
 
+function showViewerBusyOverlay(message) {
+  const viewerColumn = document.getElementById("viewer-column");
+  if (!viewerColumn) {
+    return;
+  }
+  viewerColumn.style.position = "relative";
+  let overlay = document.getElementById("viewer-busy-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "viewer-busy-overlay";
+    overlay.style.cssText = [
+      "position:absolute",
+      "inset:0",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "background:rgba(255,255,255,0.75)",
+      "font-size:14px",
+      "color:#374151",
+      "z-index:100",
+      "pointer-events:none",
+      "user-select:none"
+    ].join(";");
+    viewerColumn.appendChild(overlay);
+  }
+  overlay.textContent = message;
+  overlay.style.display = "flex";
+}
+
+function hideViewerBusyOverlay() {
+  const overlay = document.getElementById("viewer-busy-overlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 function redrawStage() {
   stage.width(getStageWidth());
   stage.height(getMainViewerContentHeight());
 
-  backgroundLayer.destroyChildren();
-  blockLayer.destroyChildren();
-  snpLayer.destroyChildren();
-  blockHighlightLayer.destroyChildren();
-  snpHighlightLayer.destroyChildren();
-  zoneOutlineLayer.destroyChildren();
+  regionLayer.destroyChildren();
+  highlightLayer.destroyChildren();
   interactionLayer.destroyChildren();
 
-  clearHighlightMap();
+  highlightLayer.add(_blockHighlightShape);
+  highlightLayer.add(_snpHighlightShape);
 
-  backgroundLayer.add(new Konva.Rect({
+  regionLayer.add(new Konva.Rect({
     x: 0,
     y: 0,
     width: getStageWidth(),
@@ -2092,34 +2114,75 @@ function redrawStage() {
     listening: false
   }));
 
-  drawGlobalAxis(blockLayer);
+  drawGlobalAxis(regionLayer);
 
-  const snpHitboxQueue = [];
+  const blockRectQueue = [];
+  const snpLineQueue = [];
+  const gffRectQueues = new Map();
 
   REGION_DATA.samples.forEach((sample, index) => {
     drawSample(
-      backgroundLayer,
-      blockLayer,
-      blockHighlightLayer,
-      snpLayer,
-      snpHighlightLayer,
-      zoneOutlineLayer,
-      interactionLayer,
-      snpHitboxQueue,
+      regionLayer,
+      blockRectQueue,
+      snpLineQueue,
+      gffRectQueues,
       sample,
       index
     );
   });
 
-  for (const hitbox of snpHitboxQueue) {
-    interactionLayer.add(hitbox);
+  if (blockRectQueue.length > 0) {
+    regionLayer.add(new Konva.Shape({
+      sceneFunc(ctx, shape) {
+        ctx.beginPath();
+        for (const rect of blockRectQueue) {
+          ctx.rect(rect.x, rect.y, rect.width, rect.height);
+        }
+        ctx.fillStrokeShape(shape);
+      },
+      fill: CONFIG.blockFill,
+      strokeWidth: 0,
+      listening: false
+    }));
   }
 
-  drawGffTrackLegend(blockLayer);
+  if (snpLineQueue.length > 0) {
+    regionLayer.add(new Konva.Shape({
+      sceneFunc(ctx, shape) {
+        ctx.beginPath();
+        for (const seg of snpLineQueue) {
+          ctx.moveTo(seg.x, seg.y0);
+          ctx.lineTo(seg.x, seg.y1);
+        }
+        ctx.fillStrokeShape(shape);
+      },
+      stroke: CONFIG.snpColor,
+      strokeWidth: CONFIG.snpMinWidthPx,
+      listening: false
+    }));
+  }
+
+  gffRectQueues.forEach((rects, color) => {
+    regionLayer.add(new Konva.Shape({
+      sceneFunc(ctx, shape) {
+        ctx.beginPath();
+        for (const r of rects) {
+          drawRoundedRect(ctx, r.x, r.y, r.width, r.height, 2);
+        }
+        ctx.fillStrokeShape(shape);
+      },
+      fill: color,
+      opacity: 0.85,
+      strokeWidth: 0,
+      listening: false
+    }));
+  });
+
+  drawGffTrackLegend(regionLayer);
   drawScrollbar(interactionLayer);
   reapplyDisplayIfVisible();
   stage.draw();
-  rebuildHoverSpatialIndex();
+  ensureHoverSpatialIndex();
 }
 
 function getAlignmentContainer() {
@@ -2735,11 +2798,10 @@ function renderAlignmentEmpty(message) {
   alignmentStage.width(getAlignmentStageWidth());
   alignmentStage.height(160);
 
-  alignmentBackgroundLayer.destroyChildren();
-  alignmentSequenceLayer.destroyChildren();
+  alignmentDrawLayer.destroyChildren();
   alignmentInteractionLayer.destroyChildren();
 
-  alignmentBackgroundLayer.add(new Konva.Rect({
+  alignmentDrawLayer.add(new Konva.Rect({
     x: 0,
     y: 0,
     width: getAlignmentStageWidth(),
@@ -2748,7 +2810,7 @@ function renderAlignmentEmpty(message) {
     listening: false
   }));
 
-  alignmentSequenceLayer.add(new Konva.Text({
+  alignmentDrawLayer.add(new Konva.Text({
     x: 14,
     y: 18,
     width: Math.max(1, getAlignmentStageWidth() - 28),
@@ -2823,11 +2885,10 @@ function redrawAlignmentViewer() {
   alignmentStage.width(getAlignmentStageWidth());
   alignmentStage.height(stageHeight);
 
-  alignmentBackgroundLayer.destroyChildren();
-  alignmentSequenceLayer.destroyChildren();
+  alignmentDrawLayer.destroyChildren();
   alignmentInteractionLayer.destroyChildren();
 
-  alignmentBackgroundLayer.add(new Konva.Rect({
+  alignmentDrawLayer.add(new Konva.Rect({
     x: 0,
     y: 0,
     width: getAlignmentStageWidth(),
@@ -2837,9 +2898,9 @@ function redrawAlignmentViewer() {
   }));
 
   const snpColumns = getBlockSnpAlignmentColumns(blockId);
-  drawAlignmentAxis(alignmentSequenceLayer, alignmentLength, snpColumns);
+  drawAlignmentAxis(alignmentDrawLayer, alignmentLength, snpColumns);
   drawAlignmentRows(
-    alignmentSequenceLayer,
+    alignmentDrawLayer,
     alignmentData,
     sampleNames,
     alignmentLength,
@@ -3027,6 +3088,7 @@ function setupColumnResizer() {
     resizer.classList.add("is-dragging");
     setBodyCursor("col-resize");
     resizer.setPointerCapture(event.pointerId);
+    showViewerBusyOverlay("Resize in progress\u2026");
     event.preventDefault();
   });
 
@@ -3045,10 +3107,6 @@ function setupColumnResizer() {
 
     rightColumn.style.flexBasis = `${sidebarWidth}px`;
     rightColumn.style.width = `${sidebarWidth}px`;
-
-    normalizeScrollX();
-    requestStageRedraw();
-    syncSidebarHeightToViewerColumn();
   });
 
   function stopColumnResize(event) {
@@ -3063,6 +3121,17 @@ function setupColumnResizer() {
     if (resizer.hasPointerCapture(event.pointerId)) {
       resizer.releasePointerCapture(event.pointerId);
     }
+
+    normalizeScrollX();
+    showViewerBusyOverlay("Rendering viewer\u2026");
+    requestStageRedraw();
+    requestAlignmentRedraw();
+    syncSidebarHeightToViewerColumn();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        hideViewerBusyOverlay();
+      });
+    });
   }
 
   resizer.addEventListener("pointerup", stopColumnResize);
@@ -3070,7 +3139,15 @@ function setupColumnResizer() {
 }
 
 function syncSidebarHeightToViewerColumn() {
-  // No-op: sidebar grows naturally with content; page scroll handles overflow.
+  const viewerColumn = document.getElementById("viewer-column");
+  const rightColumn = document.getElementById("right-column");
+
+  if (!viewerColumn || !rightColumn) {
+    return;
+  }
+
+  const viewerHeight = viewerColumn.getBoundingClientRect().height;
+  rightColumn.style.height = `${viewerHeight}px`;
 }
 
 function setupFloatingTooltips() {
@@ -3174,7 +3251,7 @@ stage.on("pointermove", () => {
     return;
   }
 
-  if (!state.suppressHover) {
+  if (!state.suppressHover && !state.isApplyingPin) {
     const resolved = resolveHoveredFeature(pointer.x, pointer.y);
     applyResolvedHover(resolved);
 

@@ -224,7 +224,8 @@ body {
   min-width: {{ SIDEBAR_MIN_WIDTH }}px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar-panel {
@@ -232,10 +233,47 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel-bg);
+  flex-shrink: 0;
+}
+
+.sidebar-panel + .sidebar-panel {
+  margin-top: 16px;
 }
 
 .sidebar {
-  overflow-y: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebar:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.4) transparent;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+  transition: background-color 160ms ease;
+}
+
+.sidebar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.sidebar:hover::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.55);
 }
 
 .sidebar-header {
