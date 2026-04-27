@@ -90,7 +90,7 @@ body {
   z-index: 10;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: center;
   align-content: flex-start;
   align-items: center;
   gap: 8px;
@@ -464,4 +464,103 @@ body {
 .summary-card h3 {
   margin: 0 0 8px 0;
   font-size: 15px;
+}
+
+/* ================================================================
+   Search UI
+   ================================================================ */
+
+.viewer-toolbar-row {
+  flex: 0 0 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.viewer-toolbar-row > * {
+  pointer-events: auto;
+}
+
+.search-mode-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.search-mode-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 80ms, color 80ms, border-color 80ms;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.search-mode-chip.active,
+.search-mode-chip.active:hover {
+  background: #e8f2ff;
+  border-color: #7ab7ff;
+  color: #1f4f82;
+}
+
+.search-mode-chip:not(.active):hover {
+  background: #f5f5f5;
+  color: #222;
+}
+
+.search-input {
+  width: 190px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  outline: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.search-input:focus {
+  border-color: #2f5f95;
+  box-shadow: 0 0 0 2px rgba(47, 95, 149, 0.15);
+}
+
+.search-sample-select {
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 140px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.search-sample-select:focus {
+  outline: none;
+  border-color: #2f5f95;
+}
+
+.search-status {
+  font-size: 11px;
+  color: #dc2626;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  pointer-events: none;
+}
+
+#search-toggle.search-open {
+  background: #e8f1fb;
+  border-color: #c7dbf2;
+  color: #2f5f95;
 }

@@ -30,11 +30,21 @@
               <button id="feature-next" class="feature-nav-button hidden" type="button">Next</button>
             </div>
             <div class="viewer-toolbar-group">
-              <button id="pan-left" type="button">←</button>
-              <button id="pan-right" type="button">→</button>
               <button id="zoom-out" type="button">−</button>
               <button id="zoom-in" type="button">+</button>
               <button id="zoom-reset" type="button">Reset</button>
+              <button id="search-toggle" type="button">Search</button>
+            </div>
+            <div id="search-row" class="viewer-toolbar-row hidden">
+              <div class="search-mode-chips">
+                <button class="search-mode-chip active" data-mode="id" type="button">ID</button>
+                <button class="search-mode-chip" data-mode="zone" type="button">Zone pos</button>
+                <button class="search-mode-chip" data-mode="source" type="button">Source pos</button>
+              </div>
+              <select id="search-sample-select" class="search-sample-select hidden" aria-label="Sample"></select>
+              <input id="search-input" class="search-input" type="text" placeholder="Block ID, SNP key, or feature ID" autocomplete="off" />
+              <button id="search-go" type="button">Go</button>
+              <span id="search-status" class="search-status" aria-live="polite"></span>
             </div>
           </div>
           <div id="viewer" class="viewer" tabindex="0"></div>
@@ -55,8 +65,6 @@
                 <button id="alignment-snp-next" class="alignment-snp-nav-button" type="button">Next SNP</button>
               </div>
               <div class="alignment-toolbar-group">
-                <button id="alignment-pan-left" type="button">←</button>
-                <button id="alignment-pan-right" type="button">→</button>
                 <button id="alignment-zoom-out" type="button">−</button>
                 <button id="alignment-zoom-in" type="button">+</button>
                 <button id="alignment-zoom-reset" type="button">Reset</button>

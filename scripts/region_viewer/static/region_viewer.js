@@ -106,6 +106,19 @@ const derivedData = {
   kimura2pGlobalColorScaleBounds: { min: 0, max: 1 }
 };
 
+const searchIndexes = {
+  blockIdToFeatureId: new Map(),
+  snpKeyToFeatureId: new Map(),
+  featureIdToFeatureType: new Map(),
+  featureIdToZoneRange: new Map(),
+  sampleByName: new Map()
+};
+
+const _searchState = {
+  mode: "id",
+  isOpen: false
+};
+
 const lastAlignmentRenderState = {
   blockId: undefined,
   focusedSnpColumn: undefined,
@@ -712,9 +725,9 @@ function getBlockHighlightGeometries(featureId) {
       const x1 = worldXToScreenX(clippedEnd);
       results.push({
         x: x0,
-        y: panelTop + CONFIG.trackY,
+        y: panelTop + CONFIG.trackY + 0.5,
         width: Math.max(CONFIG.blockHighlightMinWidthPx, x1 - x0),
-        height: CONFIG.trackHeight
+        height: CONFIG.trackHeight - 1
       });
     }
   }
@@ -737,7 +750,7 @@ function getSnpHighlightGeometries(featureId) {
       const panelTop = computePanelTop(i);
       const x = worldXToScreenX(snp.pos_in_zone);
       const y0 = getSnpY(panelTop);
-      results.push({ x, y0, y1: y0 + CONFIG.snpHeight });
+      results.push({ x, y0, y1: y0 + CONFIG.snpHeight - 2 });
     }
   }
   return results;
@@ -1518,6 +1531,22 @@ function drawSampleOutline(layer, sample, panelTop) {
   const x1 = worldXToScreenX(clippedEnd);
   const yTop = panelTop + CONFIG.trackY;
   const yBottom = yTop + CONFIG.trackHeight;
+  const isFullyVisible = clippedStart === 1 && clippedEnd === sample.zone_length;
+
+  if (isFullyVisible) {
+    layer.add(new Konva.Rect({
+      x: x0,
+      y: yTop,
+      width: Math.max(1, x1 - x0),
+      height: CONFIG.trackHeight,
+      stroke: "black",
+      strokeWidth: 1,
+      fillEnabled: false,
+      cornerRadius: 2,
+      listening: false
+    }));
+    return;
+  }
 
   layer.add(new Konva.Line({
     points: [x0, yTop, x1, yTop],
@@ -1587,7 +1616,7 @@ function getFeatureY(panelTop) {
 }
 
 function getSnpY(panelTop) {
-  return panelTop + CONFIG.trackY;
+  return panelTop + CONFIG.trackY + 1;
 }
 
 function getBlockGeometry(feature, panelTop, minWidthPx) {
@@ -1707,6 +1736,7 @@ function drawSamplePanelBackground(layer, sample, panelTop) {
 
 function drawSample(
   layer,
+  outlineLayerArg,
   blockRectQueue,
   snpLineQueue,
   gffRectQueues,
@@ -1720,7 +1750,7 @@ function drawSample(
 
   drawSampleLabel(layer, panelTop, sample.sample);
   drawSampleTrackBackground(layer, sample, panelTop);
-  drawSampleOutline(layer, sample, panelTop);
+  drawSampleOutline(outlineLayerArg, sample, panelTop);
   drawGffTracks(layer, sample, panelTop, gffRectQueues);
 
   for (const block of sample.blocks) {
@@ -1743,7 +1773,7 @@ function drawSample(
 
     const x = worldXToScreenX(snp.pos_in_zone);
     const y0 = getSnpY(panelTop);
-    snpLineQueue.push({ x, y0, y1: y0 + CONFIG.snpHeight });
+    snpLineQueue.push({ x, y0, y1: y0 + CONFIG.snpHeight - 2 });
   }
 }
 
@@ -1899,10 +1929,12 @@ const stage = new Konva.Stage({
 
 const regionLayer = new Konva.Layer({ listening: false });
 const highlightLayer = new Konva.Layer({ listening: false });
+const outlineLayer = new Konva.Layer({ listening: false });
 const interactionLayer = new Konva.Layer();
 
 stage.add(regionLayer);
 stage.add(highlightLayer);
+stage.add(outlineLayer);
 stage.add(interactionLayer);
 
 let _blockHighlightGeoms = [];
@@ -2100,6 +2132,7 @@ function redrawStage() {
 
   regionLayer.destroyChildren();
   highlightLayer.destroyChildren();
+  outlineLayer.destroyChildren();
   interactionLayer.destroyChildren();
 
   highlightLayer.add(_blockHighlightShape);
@@ -2123,6 +2156,7 @@ function redrawStage() {
   REGION_DATA.samples.forEach((sample, index) => {
     drawSample(
       regionLayer,
+      outlineLayer,
       blockRectQueue,
       snpLineQueue,
       gffRectQueues,
@@ -3088,7 +3122,7 @@ function setupColumnResizer() {
     resizer.classList.add("is-dragging");
     setBodyCursor("col-resize");
     resizer.setPointerCapture(event.pointerId);
-    showViewerBusyOverlay("Resize in progress\u2026");
+    showViewerBusyOverlay(" ");
     event.preventDefault();
   });
 
@@ -3328,6 +3362,301 @@ alignmentStage.on("pointerleave", () => {
   setAlignmentCursor("");
 });
 
+function buildSearchIndexes() {
+  const {
+    blockIdToFeatureId,
+    snpKeyToFeatureId,
+    featureIdToFeatureType,
+    featureIdToZoneRange,
+    sampleByName
+  } = searchIndexes;
+
+  for (const sample of REGION_DATA.samples) {
+    sampleByName.set(sample.sample, sample);
+
+    for (const block of sample.blocks) {
+      const numericBlockId = Number(block.block_id);
+      const featureId = block.feature_id;
+
+      if (!blockIdToFeatureId.has(numericBlockId)) {
+        blockIdToFeatureId.set(numericBlockId, featureId);
+      }
+
+      featureIdToFeatureType.set(featureId, "block");
+
+      if (!featureIdToZoneRange.has(featureId)) {
+        featureIdToZoneRange.set(featureId, {
+          start: block.block_start_in_zone,
+          end: block.block_end_in_zone
+        });
+      }
+    }
+
+    for (const snp of sample.snps) {
+      const snpKey = `${snp.block_id}:${snp.aln_pos}`;
+      const featureId = snp.feature_id;
+
+      if (!snpKeyToFeatureId.has(snpKey)) {
+        snpKeyToFeatureId.set(snpKey, featureId);
+      }
+
+      featureIdToFeatureType.set(featureId, "snp");
+
+      if (!featureIdToZoneRange.has(featureId)) {
+        featureIdToZoneRange.set(featureId, {
+          start: snp.pos_in_zone,
+          end: snp.pos_in_zone
+        });
+      }
+    }
+  }
+}
+
+function setSearchMode(mode) {
+  _searchState.mode = mode;
+
+  const chips = document.querySelectorAll(".search-mode-chip");
+  for (const chip of chips) {
+    chip.classList.toggle("active", chip.dataset.mode === mode);
+  }
+
+  const inputEl = document.getElementById("search-input");
+  const sampleSelect = document.getElementById("search-sample-select");
+  const statusEl = document.getElementById("search-status");
+
+  if (inputEl) {
+    if (mode === "id") {
+      inputEl.placeholder = "Block or SNP ID";
+    } else if (mode === "zone") {
+      inputEl.placeholder = "Zone coordinate (bp)";
+    } else {
+      inputEl.placeholder = "Source coordinate (bp)";
+    }
+  }
+
+  if (sampleSelect) {
+    sampleSelect.classList.toggle("hidden", mode !== "source");
+  }
+
+  if (statusEl) {
+    statusEl.textContent = "";
+  }
+}
+
+function resolveIdSearch(query) {
+  const trimmed = query.trim();
+
+  if (!trimmed) {
+    return { error: "Please enter an ID." };
+  }
+
+  if (trimmed.includes("::")) {
+    const featureType = searchIndexes.featureIdToFeatureType.get(trimmed);
+    if (featureType) {
+      return { featureId: trimmed, featureType };
+    }
+    return { error: `Feature not found: "${trimmed}".` };
+  }
+
+  if (trimmed.includes(":")) {
+    const featureId = searchIndexes.snpKeyToFeatureId.get(trimmed);
+    if (featureId) {
+      return { featureId, featureType: "snp" };
+    }
+    return { error: `SNP not found: "${trimmed}".` };
+  }
+
+  const blockId = parseInt(trimmed, 10);
+  if (!Number.isNaN(blockId) && String(blockId) === trimmed) {
+    const featureId = searchIndexes.blockIdToFeatureId.get(blockId);
+    if (featureId) {
+      return { featureId, featureType: "block" };
+    }
+    return { error: `Block ${blockId} not found.` };
+  }
+
+  return { error: `Unrecognized ID: "${trimmed}".` };
+}
+
+function resolveZonePositionSearch(position) {
+  if (!Number.isFinite(position) || position <= 0) {
+    return { error: "Please enter a valid position." };
+  }
+
+  if (position > REGION_DATA.max_zone_length) {
+    return { error: `Position out of range (max: ${REGION_DATA.max_zone_length}).` };
+  }
+
+  return { position };
+}
+
+function resolveSourcePositionSearch(sampleName, position) {
+  if (!Number.isFinite(position) || position <= 0) {
+    return { error: "Please enter a valid position." };
+  }
+
+  const sample = searchIndexes.sampleByName.get(sampleName);
+
+  if (!sample) {
+    return { error: `Sample "${sampleName}" not found.` };
+  }
+
+  const posInZone = position - sample.zone_start_in_source_seq + 1;
+
+  if (posInZone < 1 || posInZone > sample.zone_length) {
+    return {
+      error: `Position ${position} is outside the zone for "${sampleName}" ` +
+        `(zone: ${sample.zone_start_in_source_seq}–` +
+        `${sample.zone_start_in_source_seq + sample.zone_length - 1}).`
+    };
+  }
+
+  return { posInZone };
+}
+
+function centerRegionOnRange(start, end) {
+  const rangeLength = Math.max(1, end - start + 1);
+  const targetVisibleBp = Math.max(CONFIG.targetVisibleBp, rangeLength * 3);
+  const desiredZoom = REGION_DATA.max_zone_length / targetVisibleBp;
+  const newZoom = Math.min(
+    getMaxZoomX(),
+    Math.max(getInitialZoomX(), desiredZoom)
+  );
+  state.zoomX = newZoom;
+  const centerBp = (start + end) / 2;
+  const visibleSpan = getVisibleBpSpan();
+  setVisibleStartBp(centerBp - visibleSpan / 2);
+  requestStageRedraw();
+}
+
+function centerRegionOnPosition(position) {
+  const visibleSpan = getVisibleBpSpan();
+  setVisibleStartBp(position - visibleSpan / 2);
+  requestStageRedraw();
+}
+
+function centerRegionOnPositionWithZoom(position) {
+  const desiredZoom = REGION_DATA.max_zone_length / CONFIG.targetVisibleBp;
+  state.zoomX = Math.min(getMaxZoomX(), Math.max(getInitialZoomX(), desiredZoom));
+  const visibleSpan = getVisibleBpSpan();
+  setVisibleStartBp(position - visibleSpan / 2);
+  requestStageRedraw();
+}
+
+function runFeatureSearch() {
+  const statusEl = document.getElementById("search-status");
+  const inputEl = document.getElementById("search-input");
+  const sampleSelect = document.getElementById("search-sample-select");
+
+  if (!statusEl || !inputEl) {
+    return;
+  }
+
+  statusEl.textContent = "";
+  const mode = _searchState.mode;
+  const rawInput = inputEl.value;
+
+  if (mode === "id") {
+    const result = resolveIdSearch(rawInput);
+    if (result.error) {
+      statusEl.textContent = result.error;
+      return;
+    }
+    const range = searchIndexes.featureIdToZoneRange.get(result.featureId);
+    if (range) {
+      centerRegionOnRange(range.start, range.end);
+    }
+    setPinnedFeature(result.featureType, result.featureId);
+    return;
+  }
+
+  if (mode === "zone") {
+    const position = Number(rawInput.trim());
+    const result = resolveZonePositionSearch(position);
+    if (result.error) {
+      statusEl.textContent = result.error;
+      return;
+    }
+    centerRegionOnPositionWithZoom(result.position);
+    return;
+  }
+
+  if (mode === "source") {
+    const sampleName = sampleSelect ? sampleSelect.value : "";
+    if (!sampleName) {
+      statusEl.textContent = "Please select a sample.";
+      return;
+    }
+    const position = Number(rawInput.trim());
+    const result = resolveSourcePositionSearch(sampleName, position);
+    if (result.error) {
+      statusEl.textContent = result.error;
+      return;
+    }
+    centerRegionOnPositionWithZoom(result.posInZone);
+  }
+}
+
+function setupSearchUI() {
+  const sampleSelect = document.getElementById("search-sample-select");
+  if (sampleSelect) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "\u2014 sample \u2014";
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    sampleSelect.appendChild(placeholder);
+
+    for (const sampleName of getSampleOrder()) {
+      const option = document.createElement("option");
+      option.value = sampleName;
+      option.textContent = sampleName;
+      sampleSelect.appendChild(option);
+    }
+  }
+
+  const searchToggle = document.getElementById("search-toggle");
+  const searchRow = document.getElementById("search-row");
+  if (searchToggle && searchRow) {
+    searchToggle.addEventListener("click", () => {
+      _searchState.isOpen = !_searchState.isOpen;
+      searchRow.classList.toggle("hidden", !_searchState.isOpen);
+      searchToggle.classList.toggle("search-open", _searchState.isOpen);
+      if (_searchState.isOpen) {
+        const input = document.getElementById("search-input");
+        if (input) {
+          input.focus();
+        }
+      }
+      requestStageRedraw();
+    });
+  }
+
+  const chips = document.querySelectorAll(".search-mode-chip");
+  for (const chip of chips) {
+    chip.addEventListener("click", () => {
+      setSearchMode(chip.dataset.mode);
+    });
+  }
+
+  const goButton = document.getElementById("search-go");
+  if (goButton) {
+    goButton.addEventListener("click", runFeatureSearch);
+  }
+
+  const inputEl = document.getElementById("search-input");
+  if (inputEl) {
+    inputEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runFeatureSearch();
+      }
+    });
+  }
+
+  setSearchMode("id");
+}
+
 function initDerivedData() {
   derivedData.sampleOrder = REGION_DATA.samples.map(function(s) {
     return s.sample;
@@ -3401,11 +3730,13 @@ function initDerivedData() {
 
 state.featureGroups = buildFeatureGroups(REGION_DATA);
 initDerivedData();
+buildSearchIndexes();
 renderAnalysisSettings();
 renderSidebarDefault();
 state.zoomX = getInitialZoomX();
 state.scrollX = 0;
 setupColumnResizer();
+setupSearchUI();
 setupWheelScrolling();
 showRenderingOverlay();
 requestAnimationFrame(() => {
@@ -3430,14 +3761,6 @@ document.getElementById("feature-prev").addEventListener("click", () => {
 
 document.getElementById("feature-next").addEventListener("click", () => {
   pinNeighborFeature(1);
-});
-
-document.getElementById("pan-left").addEventListener("click", () => {
-  moveByViewportFraction(-1, 0.1);
-});
-
-document.getElementById("pan-right").addEventListener("click", () => {
-  moveByViewportFraction(1, 0.1);
 });
 
 document.getElementById("zoom-in").addEventListener("click", () => {
@@ -3519,6 +3842,10 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (document.activeElement && document.activeElement.id === "search-input") {
+    return;
+  }
+
   event.preventDefault();
   const direction = event.key === "ArrowLeft" ? -1 : 1;
 
@@ -3535,14 +3862,6 @@ document.getElementById("alignment-snp-prev").addEventListener("click", () => {
 
 document.getElementById("alignment-snp-next").addEventListener("click", () => {
   focusNeighborAlignmentSnp(1);
-});
-
-document.getElementById("alignment-pan-left").addEventListener("click", () => {
-  moveAlignmentByViewportFraction(-1);
-});
-
-document.getElementById("alignment-pan-right").addEventListener("click", () => {
-  moveAlignmentByViewportFraction(1);
 });
 
 document.getElementById("alignment-zoom-in").addEventListener("click", () => {
