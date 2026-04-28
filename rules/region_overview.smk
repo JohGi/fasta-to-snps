@@ -61,12 +61,12 @@ rule generate_region_viewer:
 rule filter_snp_long_by_selected_markers:
     input:
         snp_long=SNP_POS_LONG_TSV,
-        selected_markers=SELECTED_MARKERS_TSV,
+        selected_markers=lambda wildcards: SELECTED_MARKER_SETS_BY_SLUG[wildcards.marker_set]["tsv"],
     output:
-        SELECTED_SNP_LONG
+        REGION_TRACK_DIR / "snp_positions_long.{marker_set}.tsv"
     log:
-        stdout=LOG_DIR / "filter_snp_long_by_selected_markers.stdout",
-        stderr=LOG_DIR / "filter_snp_long_by_selected_markers.stderr",
+        stdout=LOG_DIR / "filter_snp_long_by_selected_markers.{marker_set}.stdout",
+        stderr=LOG_DIR / "filter_snp_long_by_selected_markers.{marker_set}.stderr",
     shell:
         r"""
         python3 "{SCRIPTS_DIR}/filter_snp_long_by_marker_subset.py" \
@@ -77,12 +77,11 @@ rule filter_snp_long_by_selected_markers:
             2> "{log.stderr}"
         """
 
-
 rule generate_region_viewer_selected_snps:
     input:
         samples_tsv=SAMPLES_TSV,
         block_coords_tsv=BLOCK_COORDINATES_TSV,
-        snp_long=SELECTED_SNP_LONG,
+        snp_long=REGION_TRACK_DIR / "snp_positions_long.{marker_set}.tsv",
         fastas=CLEAN_FASTAS,
         stats_json=SUMMARY_STATS_JSON,
         mash_dists_tsv=MASHTREE_MATRIX,
@@ -91,12 +90,12 @@ rule generate_region_viewer_selected_snps:
         distmat_sentinels=get_distmat_chunk_sentinels,
         gff_tracks_json=GFF_TRACKS_JSON,
     output:
-        REGION_TRACK_SELECTED_HTML
+        REGION_TRACK_DIR / "region_tracks.{marker_set}.html"
     params:
-        title=get_selected_region_viewer_title,
+        title=lambda wildcards: SELECTED_MARKER_SETS_BY_SLUG[wildcards.marker_set]["title"],
     log:
-        stdout=LOG_DIR / "generate_region_viewer_selected_snps.stdout",
-        stderr=LOG_DIR / "generate_region_viewer_selected_snps.stderr",
+        stdout=LOG_DIR / "generate_region_viewer_selected_snps.{marker_set}.stdout",
+        stderr=LOG_DIR / "generate_region_viewer_selected_snps.{marker_set}.stderr",
     shell:
         r"""
         mkdir -p "{REGION_TRACK_DIR}" "$(dirname "{log.stdout}")"

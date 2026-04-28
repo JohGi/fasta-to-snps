@@ -28,8 +28,9 @@ batching:
 visualization:
   dotplot_pivot: ""
   title: "Test dataset"
-  selected_markers_tsv: "dev/integration_case_builder/dataset/selected_snps/selected_markers.tsv"
-  
+  selected_marker_sets:
+    "OK KASP": "dev/integration_case_builder/dataset/selected_snps/ok_kasp.tsv"
+    "OK PCR in silico": "dev/integration_case_builder/dataset/selected_snps/ok_pcr.tsv"
 
 gff_tracks:
   Belalur:

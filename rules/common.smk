@@ -1,5 +1,6 @@
 from pathlib import Path
 import csv
+import re
 from itertools import combinations
 
 
@@ -267,18 +268,23 @@ def write_lines(output_path: Path, values: list[str]) -> None:
             handle.write(f"{value}\n")
 
 
-def get_selected_region_viewer_title(_wildcards=None):
-    title = config.get("visualization", {}).get("title", "Region viewer")
-    return f"{title} - Selected SNPs"
+def slugify_marker_set_name(name: str) -> str:
+    """Convert a marker set name into a safe filename fragment."""
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", name.strip())
+    slug = re.sub(r"_+", "_", slug)
+    return slug.strip("_")
+
+
+def get_selected_region_viewer_title(wildcards) -> str:
+    """Return the title for one selected marker region viewer."""
+    marker_set = SELECTED_MARKER_SETS_BY_SLUG[wildcards.marker_set]
+    return marker_set["title"]
 
 
 def get_region_viewer_outputs():
-    outputs = [REGION_TRACK_HTML]
+    """Return all region viewer HTML outputs."""
+    return [REGION_TRACK_HTML, *REGION_TRACK_SELECTED_HTMLS]
 
-    if SELECTED_MARKERS_TSV:
-        outputs.append(REGION_TRACK_SELECTED_HTML)
-
-    return outputs
 
 SAMPLES_TSV = Path(config["samples"])
 SAMPLES = read_samples(SAMPLES_TSV)
@@ -288,7 +294,20 @@ FASTA_BY_SAMPLE = {record["sample"]: record["fasta"] for record in SAMPLES}
 OUTDIR = Path(config["outdir"])
 SCRIPTS_DIR = Path(workflow.current_basedir) / "../scripts"
 PROJECT_TITLE = config.get("visualization", {}).get("title", "Project")
-SELECTED_MARKERS_TSV = config.get("visualization", {}).get("selected_markers_tsv", "")
+VISUALIZATION_CONFIG = config.get("visualization", {})
+SELECTED_MARKER_SETS = VISUALIZATION_CONFIG.get("selected_marker_sets", {})
+
+SELECTED_MARKER_SETS_BY_SLUG = {
+    slugify_marker_set_name(name): {
+        "name": name,
+        "tsv": path,
+        "title": f"{PROJECT_TITLE} - {name}" if PROJECT_TITLE else name,
+    }
+    for name, path in SELECTED_MARKER_SETS.items()
+}
+
+if len(SELECTED_MARKER_SETS_BY_SLUG) != len(SELECTED_MARKER_SETS):
+    raise ValueError("Several selected marker set names produce the same filename slug.")
 
 CLEAN_FASTA_DIR = OUTDIR / "01_clean_fasta"
 MULTIFASTA_DIR = CLEAN_FASTA_DIR / "multifasta"
@@ -364,8 +383,14 @@ DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
 SUMMARY_STATS_JSON = SUMMARY_STATS_DIR / "summary_stats.json"
 SUMMARY_STATS_TXT = SUMMARY_STATS_DIR / "summary_stats.txt"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
-SELECTED_SNP_LONG = REGION_TRACK_DIR / "snp_positions_long.selected.tsv"
-REGION_TRACK_SELECTED_HTML = REGION_TRACK_DIR / "region_tracks.selected_snps.html"
+SELECTED_SNP_LONGS = expand(
+    REGION_TRACK_DIR / "snp_positions_long.{marker_set}.tsv",
+    marker_set=SELECTED_MARKER_SETS_BY_SLUG.keys(),
+)
+REGION_TRACK_SELECTED_HTMLS = expand(
+    REGION_TRACK_DIR / "region_tracks.{marker_set}.html",
+    marker_set=SELECTED_MARKER_SETS_BY_SLUG.keys(),
+)
 MASHTREE_MATRIX = MASH_DISTANCES_DIR / "mashtree.matrix.tsv"
 MASHTREE_TREE = MASH_DISTANCES_DIR / "mashtree.dnd"
 MASKED_BLOCK_N_STATS_TSV = BLOCK_STATS_DIR / "masked_block_n_stats.tsv"
