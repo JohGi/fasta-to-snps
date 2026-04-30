@@ -30,6 +30,7 @@ rule generate_region_viewer:
         align_sentinels=get_align_chunk_sentinels,
         distmat_sentinels=get_distmat_chunk_sentinels,
         gff_tracks_json=GFF_TRACKS_JSON,
+        dotplot_manifest=DOTPLOT_MANIFEST,
     output:
         REGION_TRACK_HTML
     benchmark:
@@ -51,6 +52,7 @@ rule generate_region_viewer:
             --masked-align-dir "{ALIGN_DIR}" \
             --masked-block-n-stats "{input.n_stats_tsv}" \
             --gff-tracks-json "{input.gff_tracks_json}" \
+            --dotplot-manifest-json {input.dotplot_manifest} \
             --config-yaml "{workflow.configfiles[0]}" \
             --title "{PROJECT_TITLE}" \
             --output "{output}" \
@@ -89,6 +91,7 @@ rule generate_region_viewer_selected_snps:
         align_sentinels=get_align_chunk_sentinels,
         distmat_sentinels=get_distmat_chunk_sentinels,
         gff_tracks_json=GFF_TRACKS_JSON,
+        dotplot_manifest=DOTPLOT_MANIFEST,
     output:
         REGION_TRACK_DIR / "region_tracks.{marker_set}.html"
     params:

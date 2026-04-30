@@ -134,3 +134,13 @@ class GffTrack:
     sample: str
     track_name: str
     features: list[GffGeneFeature]
+
+
+@define(frozen=True)
+class DotplotRecord:
+    """Store one dotplot entry from the dotplot manifest JSON."""
+
+    pair_id: str
+    x_sample: str
+    y_sample: str
+    svg_rel_path: str

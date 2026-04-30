@@ -15,4 +15,7 @@ logs/
 
 # OS/editor noise
 .DS_Store
+
+# tests
 plop
+test/

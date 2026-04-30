@@ -380,6 +380,7 @@ DOTPLOT_SIMPLE_SVGS = expand(
     pair_id=DOTPLOT_PAIR_IDS,
 )
 DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
+DOTPLOT_MANIFEST = f"{DOTPLOT_DIR}/dotplots_manifest.json"
 SUMMARY_STATS_JSON = SUMMARY_STATS_DIR / "summary_stats.json"
 SUMMARY_STATS_TXT = SUMMARY_STATS_DIR / "summary_stats.txt"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"

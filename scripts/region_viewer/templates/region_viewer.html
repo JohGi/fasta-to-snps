@@ -23,7 +23,14 @@
           </p>
         </section>
 
-        <div class="viewer-wrapper">
+        <div class="viewer-panel">
+          <!-- Row 1: mode buttons, left-aligned -->
+          <div class="viewer-panel-topbar">
+            <button id="browser-mode-btn" class="mode-btn active" type="button">Browser</button>
+            <button id="dotplot-mode-btn" class="mode-btn" type="button">Dotplot</button>
+          </div>
+
+          <!-- Row 2: mode-specific controls, centered -->
           <div class="viewer-toolbar">
             <div class="viewer-toolbar-group">
               <button id="feature-prev" class="feature-nav-button hidden" type="button">Previous</button>
@@ -47,8 +54,40 @@
               <span id="search-status" class="search-status" aria-live="polite"></span>
             </div>
           </div>
-          <div id="viewer" class="viewer" tabindex="0"></div>
+          <div id="dotplot-controls-row" class="dotplot-controls hidden">
+            <div class="dotplot-control-group dotplot-nav-group">
+              <button id="dotplot-feature-prev" class="dotplot-feature-nav-button hidden" type="button">Previous</button>
+              <button id="dotplot-feature-next" class="dotplot-feature-nav-button hidden" type="button">Next</button>
+              <button id="dotplot-center-feature" class="dotplot-feature-nav-button hidden" type="button">Center</button>
+            </div>
+            <div class="dotplot-control-group">
+              <label class="dotplot-select-label" for="dotplot-y-select">Y sample</label>
+              <select id="dotplot-y-select" class="dotplot-select" aria-label="Y sample"></select>
+            </div>
+            <div class="dotplot-control-group">
+              <label class="dotplot-select-label" for="dotplot-x-select">X sample</label>
+              <select id="dotplot-x-select" class="dotplot-select" aria-label="X sample"></select>
+            </div>
+            <div class="dotplot-control-group dotplot-zoom-group">
+              <button id="dotplot-zoom-out" type="button" title="Zoom out">−</button>
+              <button id="dotplot-zoom-in" type="button" title="Zoom in">+</button>
+              <button id="dotplot-zoom-reset" type="button">Reset zoom</button>
+            </div>
+          </div>
+
+          <!-- Row 3: content area -->
+          <div class="viewer-wrapper">
+            <div id="viewer" class="viewer" tabindex="0"></div>
+          </div>
+          <div id="dotplot-panel" class="dotplot-content hidden">
+            <p id="dotplot-status-msg" class="hint dotplot-status-msg hidden"></p>
+            <!-- Hidden loader img: source for Konva.Image; naturalWidth/Height used for sizing. -->
+            <img id="dotplot-svg-img" class="dotplot-svg-loader" src="" alt="" aria-hidden="true" />
+            <!-- Konva stage container; width/height set by JS to match image + track gutters. -->
+            <div id="dotplot-viewer" class="dotplot-viewer hidden"></div>
+          </div>
         </div>
+
                 <section id="alignment-panel" class="alignment-panel hidden">
           <div class="alignment-header">
             <div>

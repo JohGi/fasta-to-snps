@@ -7,6 +7,7 @@ from .constants import (
     BLOCK_FILL,
     BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
     BLOCK_MIN_WIDTH_PX,
+    DOTPLOT_INTERSECTION_MIN_SIZE_PX,
     BOTTOM_MARGIN,
     BP_TO_KB_THRESHOLD_BP,
     END_PADDING_PX,
@@ -39,6 +40,7 @@ from .constants import (
 from .models import (
     BlockAlignment,
     BlockFeature,
+    DotplotRecord,
     GffTrack,
     SampleData,
     SampleRecord,
@@ -92,6 +94,7 @@ def build_region_payload(
     block_alignments: dict[str, BlockAlignment] | None = None,
     gff_tracks_by_sample: dict[str, list[GffTrack]] | None = None,
     analysis_settings: dict[str, object] | None = None,
+    dotplots: list[DotplotRecord] | None = None,
 ) -> dict[str, object]:
     """Build the JSON payload injected into the HTML."""
     max_zone_length = max(sample.zone_length for sample in sample_data)
@@ -161,6 +164,18 @@ def build_region_payload(
             for block_id, alignment in (block_alignments or {}).items()
         },
         "analysis_settings": analysis_settings or {},
+        "dotplots": {
+            "format_version": 1,
+            "pairs": [
+                {
+                    "pair_id": record.pair_id,
+                    "x_sample": record.x_sample,
+                    "y_sample": record.y_sample,
+                    "svg_rel_path": record.svg_rel_path,
+                }
+                for record in (dotplots or [])
+            ],
+        },
     }
 
     return payload
@@ -195,6 +210,7 @@ def build_config_payload() -> dict[str, object]:
         "blockHighlightMinWidthPx": BLOCK_HIGHLIGHT_MIN_WIDTH_PX,
         "snpMinWidthPx": SNP_MIN_WIDTH_PX,
         "snpHighlightMinWidthPx": SNP_HIGHLIGHT_MIN_WIDTH_PX,
+        "dotplotIntersectionMinSizePx": DOTPLOT_INTERSECTION_MIN_SIZE_PX,
         "pinHighlightColor": PIN_HIGHLIGHT_COLOR,
         "hoverHighlightColor": HOVER_HIGHLIGHT_COLOR,
         "sidebarMinWidth": SIDEBAR_MIN_WIDTH,

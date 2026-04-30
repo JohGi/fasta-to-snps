@@ -19,6 +19,7 @@ from .io import (
     parse_snps,
     read_block_alignments,
     read_blocks,
+    read_dotplot_manifest,
     read_fasta_lengths,
     read_gff_gene_tracks,
     read_gff_tracks_json,
@@ -83,6 +84,7 @@ class RegionOverviewBuilder:
     title: str
     output_path: Path
     config_yaml_path: Path | None = field(default=None)
+    dotplot_manifest_json_path: Path | None = field(default=None)
 
     def run(self) -> None:
         """Run the full HTML generation workflow."""
@@ -128,6 +130,11 @@ class RegionOverviewBuilder:
 
         analysis_settings = read_analysis_settings(self.config_yaml_path)
 
+        dotplot_records = read_dotplot_manifest(
+            path=self.dotplot_manifest_json_path,
+            output_path=self.output_path,
+        )
+
         region_data = build_region_payload(
             sample_data=sample_data,
             summary_stats=summary_stats,
@@ -137,6 +144,7 @@ class RegionOverviewBuilder:
             block_alignments=block_alignments,
             gff_tracks_by_sample=gff_tracks_by_sample,
             analysis_settings=analysis_settings,
+            dotplots=dotplot_records,
         )
 
         html = build_html(region_data, self.title)

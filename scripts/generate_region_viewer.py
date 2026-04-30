@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--masked-align-dir", type=Path, required=True)
     parser.add_argument("--masked-block-n-stats", type=Path, required=True)
     parser.add_argument("--gff-tracks-json", type=Path, required=True)
+    parser.add_argument("--dotplot-manifest-json", type=Path, required=False)
     parser.add_argument("--config-yaml", type=Path, default=None)
     parser.add_argument("--title", type=str, default="Region viewer")
     parser.add_argument("--output", type=Path, required=True)
@@ -65,6 +66,7 @@ def main() -> None:
         masked_align_dir=args.masked_align_dir,
         masked_block_n_stats_path=args.masked_block_n_stats,
         gff_tracks_json_path=args.gff_tracks_json,
+        dotplot_manifest_json_path=args.dotplot_manifest_json,
         config_yaml_path=args.config_yaml,
         title=args.title,
         output_path=args.output,

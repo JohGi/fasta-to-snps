@@ -114,7 +114,10 @@ rule convert_pairwise_dotplot_pdf_to_svg:
     shell:
         r"""
         mkdir -p "{DOTPLOT_SVG_DIR}" "$(dirname "{log}")"
-        pdfcrop.pl "{input}" "{output.cropped_pdf}" 2> "{log}"
+        python {SCRIPTS_DIR}/crop_pdf.py \
+            --input "{input}" \
+            --output "{output.cropped_pdf}" \
+            2> "{log}"
         pdf2svg "{output.cropped_pdf}" "{output.svg}" 2>> "{log}"
         """
 
@@ -122,7 +125,8 @@ rule build_dotplot_gallery_html:
     input:
         svgs=DOTPLOT_SIMPLE_SVGS
     output:
-        DOTPLOT_GALLERY_HTML
+        html=DOTPLOT_GALLERY_HTML,
+        manifest=DOTPLOT_MANIFEST,
     benchmark:
         BENCHMARK_DIR / "build_dotplot_gallery_html" / "dotplots_gallery.tsv"
     log:
@@ -136,7 +140,8 @@ rule build_dotplot_gallery_html:
         python3 "{SCRIPTS_DIR}/build_dotplot_gallery_html.py" \
             --samples "{SAMPLES_TSV}" \
             --svg-dir "{DOTPLOT_SVG_DIR}" \
-            --output "{output}" \
+            --output "{output.html}" \
+            --manifest {output.manifest} \
             --pivot "{params.pivot}" \
             --title "{PROJECT_TITLE}" \
             1> "{log.stdout}" \

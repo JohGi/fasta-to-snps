@@ -10,6 +10,7 @@ import csv
 import html
 import logging
 import os
+import json
 from pathlib import Path
 
 from attrs import define
@@ -50,9 +51,18 @@ class GalleryConfig:
     samples_path: Path
     svg_dir: Path
     output_path: Path
+    manifest_path: Path | None = None
     pivot: str = ""
     title: str = ""
 
+@define(frozen=True)
+class DotplotRecord:
+    """Store one available pairwise dotplot."""
+
+    pair_id: str
+    x_sample: str
+    y_sample: str
+    svg_rel_path: str
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
@@ -73,6 +83,11 @@ def parse_args() -> argparse.Namespace:
         "--output",
         required=True,
         help="Output HTML file path.",
+    )
+    parser.add_argument(
+        "--manifest",
+        default="",
+        help="Optional output JSON manifest listing available pairwise SVG dotplots.",
     )
     parser.add_argument(
         "--pivot",
@@ -101,6 +116,7 @@ def build_config_from_args(args: argparse.Namespace) -> GalleryConfig:
         samples_path=Path(args.samples),
         svg_dir=Path(args.svg_dir),
         output_path=Path(args.output),
+        manifest_path=Path(args.manifest) if args.manifest else None,
         pivot=str(args.pivot).strip(),
         title=str(args.title).strip(),
     )
@@ -341,6 +357,67 @@ def build_summary_label(sample_names: list[str], pivot: str) -> str:
         )
     return f"Mode: full matrix | Samples: {len(sample_names)}"
 
+def collect_dotplot_records(
+    sample_names: list[str],
+    svg_dir: Path,
+    manifest_path: Path,
+) -> list[DotplotRecord]:
+    """Collect available dotplot SVG files for the JSON manifest."""
+    records: list[DotplotRecord] = []
+
+    row_samples = sample_names[:-1]
+    col_samples = sample_names[1:]
+    sample_to_index = {sample: index for index, sample in enumerate(sample_names)}
+
+    for row_sample in row_samples:
+        row_index = sample_to_index[row_sample]
+
+        for col_sample in col_samples:
+            col_index = sample_to_index[col_sample]
+
+            if col_index <= row_index:
+                continue
+
+            pair_id = build_pair_id(row_sample, col_sample)
+            svg_path = build_svg_path(pair_id, svg_dir)
+
+            if not svg_path.exists():
+                continue
+
+            records.append(
+                DotplotRecord(
+                    pair_id=pair_id,
+                    x_sample=col_sample,
+                    y_sample=row_sample,
+                    svg_rel_path=build_relative_svg_path(manifest_path, svg_path),
+                )
+            )
+
+    return records
+
+def write_dotplot_manifest(
+    manifest_path: Path,
+    records: list[DotplotRecord],
+) -> None:
+    """Write the available dotplot SVG manifest."""
+    payload = {
+        "format_version": 1,
+        "dotplots": [
+            {
+                "pair_id": record.pair_id,
+                "x_sample": record.x_sample,
+                "y_sample": record.y_sample,
+                "svg_rel_path": record.svg_rel_path,
+            }
+            for record in records
+        ],
+    }
+
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 def build_html_document(
     sample_names: list[str],
@@ -686,6 +763,14 @@ def main() -> None:
         title=config.title,
     )
     write_html(config.output_path, html_document)
+    if config.manifest_path is not None:
+        dotplot_records = collect_dotplot_records(
+            sample_names=sample_names,
+            svg_dir=config.svg_dir,
+            manifest_path=config.manifest_path,
+        )
+        write_dotplot_manifest(config.manifest_path, dotplot_records)
+        LOGGER.info("Wrote dotplot manifest to %s", config.manifest_path)
     LOGGER.info("Wrote gallery HTML to %s", config.output_path)
 
 

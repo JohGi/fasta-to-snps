@@ -73,50 +73,60 @@ body {
   font-size: 18px;
 }
 
+/* Unified panel wrapping both browser and dotplot modes. */
+.viewer-panel {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Top bar: mode buttons left-aligned. */
+.viewer-panel-topbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .viewer-wrapper {
-  position: relative;
   width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
+/* Controls row: centered, normal flow (not overlaid on canvas). */
 .viewer-toolbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: auto;
-  z-index: 10;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-content: flex-start;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px 8px 10px;
-  pointer-events: none;
-  min-height: var(--viewer-top-ui-height);
+  padding: 2px 0;
 }
 
 .viewer-toolbar-group {
   display: flex;
   align-items: center;
   gap: 8px;
-  pointer-events: none;
 }
-
 .viewer-toolbar button {
   min-width: 36px;
   padding: 5px 9px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.88);
+  background: white;
   color: var(--text);
   cursor: pointer;
   font-size: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  pointer-events: auto;
 }
 
 .viewer-toolbar button:hover {
@@ -477,11 +487,10 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  pointer-events: none;
 }
 
 .viewer-toolbar-row > * {
-  pointer-events: auto;
+  /* no pointer-events override needed; toolbar is normal flow */
 }
 
 .search-mode-chips {
@@ -563,4 +572,164 @@ body {
   background: #e8f1fb;
   border-color: #c7dbf2;
   color: #2f5f95;
+}
+
+/* ================================================================
+   Mode switch
+   ================================================================ */
+
+.mode-btn {
+  padding: 5px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 80ms, color 80ms, border-color 80ms;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mode-btn:hover {
+  background: #f5f5f5;
+  color: var(--text);
+}
+
+.mode-btn.active,
+.mode-btn.active:hover {
+  background: #e8f2ff;
+  border-color: #7ab7ff;
+  color: #1f4f82;
+}
+
+/* ================================================================
+   Dotplot panel
+   ================================================================ */
+
+/* Controls row (Y/X sample selects) — reuse .dotplot-controls but centered. */
+.dotplot-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+
+.dotplot-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dotplot-select-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.dotplot-select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 13px;
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 130px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.dotplot-select:focus {
+  outline: none;
+  border-color: #2f5f95;
+  box-shadow: 0 0 0 2px rgba(47, 95, 149, 0.15);
+}
+
+/* Content area wrapping the Konva stage.
+   Horizontal overflow scrolls inside the panel.
+   Vertical centering is handled by window scroll, not panel scroll,
+   so overflow-y is hidden. Centering modifier applied by JS. */
+.dotplot-content {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  min-height: 60px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Applied by JS when stageWidth <= available container width. */
+.dotplot-content--centered {
+  justify-content: center;
+}
+
+/* Hidden img element used only to load the SVG file.
+   naturalWidth/Height are read by JS to compute the Konva stage size. */
+.dotplot-svg-loader {
+  display: none;
+}
+
+/* Konva stage container; width/height are set by JS after each image load.
+   The Konva library injects a <canvas> element inside this div. */
+.dotplot-viewer {
+  display: block;
+}
+
+.dotplot-status-msg {
+  text-align: center;
+  padding: 24px;
+}
+
+/* Zoom buttons in the dotplot controls row — match browser-mode toolbar button style. */
+/* Previous / Next navigation buttons in the dotplot controls row. */
+.dotplot-nav-group {
+  margin-right: 4px;
+  border-right: 1px solid var(--border);
+  padding-right: 14px;
+}
+
+.dotplot-feature-nav-button {
+  min-width: 76px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: normal;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.dotplot-feature-nav-button:hover {
+  background: #f0f4fa;
+  border-color: #a0b4cc;
+}
+
+.dotplot-zoom-group {
+  margin-left: 12px;
+  border-left: 1px solid var(--border);
+  padding-left: 14px;
+}
+
+.dotplot-zoom-group button {
+  min-width: 36px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.dotplot-zoom-group button:hover {
+  background: #f0f4fa;
+  border-color: #a0b4cc;
 }

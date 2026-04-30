@@ -9,9 +9,10 @@ import polars as pl
 import json
 import logging
 import re
+import os
 from urllib.parse import unquote
 
-from .models import BlockFeature, SampleRecord, SnpFeature, DistanceMatrix, BlockAlignment, GffGeneFeature, GffTrack, SampleData
+from .models import BlockAlignment, BlockFeature, DistanceMatrix, DotplotRecord, GffGeneFeature, GffTrack, SampleData, SampleRecord, SnpFeature
 
 LOGGER = logging.getLogger(__name__)
 
@@ -620,6 +621,51 @@ def read_gff_gene_tracks(
             )
 
     return projected_tracks
+
+
+def read_dotplot_manifest(path: Path | None, output_path: Path) -> list[DotplotRecord]:
+    """Read dotplot records from a manifest JSON, resolving SVG paths relative to output_path."""
+    if path is None:
+        return []
+
+    if not path.is_file():
+        raise FileNotFoundError(f"Dotplot manifest JSON not found: {path}")
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+
+    if not isinstance(raw, dict) or "dotplots" not in raw:
+        raise ValueError("Dotplot manifest JSON must be a root object with a 'dotplots' list.")
+
+    raw_pairs = raw["dotplots"]
+    if not isinstance(raw_pairs, list):
+        raise ValueError("The 'dotplots' key in the manifest JSON must be a list.")
+
+    required_keys = {"pair_id", "x_sample", "y_sample", "svg_rel_path"}
+    records: list[DotplotRecord] = []
+
+    for index, entry in enumerate(raw_pairs):
+        missing = required_keys - set(entry.keys())
+        if missing:
+            raise ValueError(
+                f"Dotplot entry at index {index} is missing required keys: {sorted(missing)}"
+            )
+
+        absolute_svg = (path.parent / entry["svg_rel_path"]).resolve()
+        svg_rel_path = os.path.relpath(
+            absolute_svg,
+            start=output_path.parent.resolve(),
+        )
+
+        records.append(
+            DotplotRecord(
+                pair_id=str(entry["pair_id"]),
+                x_sample=str(entry["x_sample"]),
+                y_sample=str(entry["y_sample"]),
+                svg_rel_path=svg_rel_path,
+            )
+        )
+
+    return records
 
 
 def write_html(html: str, output_path: Path) -> None:
