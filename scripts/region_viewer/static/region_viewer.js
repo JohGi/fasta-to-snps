@@ -227,6 +227,9 @@ let _dotplotSnpHighlightShape      = null;
 let _dotplotBlockIntersectionShape = null;
 let _dotplotBlockIntersectionGeom  = null;
 
+let _dotplotSnpProjectionShape = null;
+let _dotplotSnpProjectionGeom  = null;
+
 function invalidateSidebarCache() {
   lastSidebarRenderState.mode = null;
   lastSidebarRenderState.featureId = null;
@@ -2208,6 +2211,39 @@ function hideViewerBusyOverlay() {
   }
 }
 
+function showToast(message) {
+  let toast = document.getElementById("viewer-toast");
+
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "viewer-toast";
+    toast.style.cssText = [
+      "position:fixed",
+      "left:50%",
+      "bottom:24px",
+      "transform:translateX(-50%)",
+      "background:rgba(17,24,39,0.92)",
+      "color:white",
+      "padding:10px 14px",
+      "border-radius:999px",
+      "font-size:13px",
+      "z-index:10000",
+      "opacity:0",
+      "transition:opacity 180ms ease",
+      "pointer-events:none"
+    ].join(";");
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+  toast.style.opacity = "1";
+
+  window.clearTimeout(showToast.timeoutId);
+  showToast.timeoutId = window.setTimeout(() => {
+    toast.style.opacity = "0";
+  }, 2400);
+}
+
 function drawRoundedRect(ctx, x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.moveTo(x + r, y);
@@ -4069,15 +4105,44 @@ function initDotplotStage() {
     listening: false
   });
 
-  // Translucent blue rectangle shown on the SVG image at the intersection of
-  // the highlighted block's X-sample and Y-sample coordinate intervals.
+  // Translucent blue projection bands shown on the SVG image for the
+  // highlighted block's X-sample and Y-sample coordinate intervals.
+  // The vertical band spans the full Y axis; the horizontal band spans the full X axis.
   _dotplotBlockIntersectionShape = new Konva.Shape({
     sceneFunc(ctx) {
       if (!_dotplotBlockIntersectionGeom) { return; }
-      const { x, y, width, height } = _dotplotBlockIntersectionGeom;
+
       ctx.save();
       ctx.fillStyle = "rgba(59, 130, 246, 0.18)";
-      ctx.fillRect(x, y, width, height);
+
+      const { vertical, horizontal } = _dotplotBlockIntersectionGeom;
+      ctx.fillRect(vertical.x, vertical.y, vertical.width, vertical.height);
+      ctx.fillRect(horizontal.x, horizontal.y, horizontal.width, horizontal.height);
+
+      ctx.restore();
+    },
+    visible: false,
+    listening: false
+  });
+
+  _dotplotSnpProjectionShape = new Konva.Shape({
+    sceneFunc(ctx) {
+      if (!_dotplotSnpProjectionGeom) { return; }
+
+      const { x, y, xZero, yZeroPixel } = _dotplotSnpProjectionGeom;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(59, 130, 246, 0.45)";
+      ctx.lineWidth = CONFIG.snpHighlightMinWidthPx;
+      ctx.beginPath();
+
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, yZeroPixel);
+
+      ctx.moveTo(xZero, y);
+      ctx.lineTo(x, y);
+
+      ctx.stroke();
       ctx.restore();
     },
     visible: false,
@@ -4631,6 +4696,9 @@ function redrawDotplotStage() {
   if (_dotplotBlockIntersectionShape) {
     dotplotHighlightLayer.add(_dotplotBlockIntersectionShape);
   }
+  if (_dotplotSnpProjectionShape) {
+    dotplotHighlightLayer.add(_dotplotSnpProjectionShape);
+  }
   if (_dotplotBlockHighlightShape) {
     dotplotHighlightLayer.add(_dotplotBlockHighlightShape);
   }
@@ -4879,6 +4947,59 @@ function _resolveDotplotCenterBlockFeatureId() {
   return null;
 }
 
+
+function resetActiveViewerZoom() {
+  if (isDotplotModeActive()) {
+    _dotplotState.zoom = 1;
+
+    redrawDotplotStage();
+
+    requestAnimationFrame(() => {
+      const container = document.querySelector(".dotplot-content");
+      if (container) {
+        container.scrollLeft = 0;
+      }
+
+      const stageEl = document.getElementById("dotplot-viewer");
+      if (stageEl) {
+        const stageRect = stageEl.getBoundingClientRect();
+        const dotplotCenterY = window.scrollY + stageRect.top + stageRect.height / 2;
+        const targetWindowScrollY = dotplotCenterY - window.innerHeight / 2;
+
+        window.scrollTo({
+          top: clampValue(
+            targetWindowScrollY,
+            0,
+            document.documentElement.scrollHeight - window.innerHeight
+          ),
+          behavior: "smooth"
+        });
+      }
+    });
+
+    return;
+  }
+
+  state.zoomX = getInitialZoomX();
+  state.scrollX = 0;
+  redrawStage();
+}
+
+
+function moveDotplotByViewportFraction(direction, fraction = 0.1) {
+  const container = document.querySelector(".dotplot-content");
+  if (!container) {
+    return;
+  }
+
+  const stepPx = container.clientWidth * fraction;
+  container.scrollLeft = clampValue(
+    container.scrollLeft + direction * stepPx,
+    0,
+    container.scrollWidth - container.clientWidth
+  );
+}
+
 // Centers the dotplot viewport on the pinned feature's block intersection
 // rectangle, adapting the zoom level so the rectangle occupies a meaningful
 // fraction of the visible viewport.
@@ -4953,33 +5074,106 @@ function centerDotplotOnPinnedFeature() {
         top: clampValue(targetWindowScrollY, 0, document.documentElement.scrollHeight - window.innerHeight),
         behavior: "smooth"
       });
+      showToast("R: reset zoom · F: center · Tab/Shift+Tab: navigate");
     }
   });
 }
 
-// Computes the stage-space rectangle for the block intersection overlay:
-// the area on the SVG image that corresponds to the given block's coordinate
-// interval on both the selected X and Y samples.
-// Returns { x, y, width, height } in stage pixels, or null.
 function _computeDotplotBlockIntersection(featureId) {
   const geometry = computeDotplotGeometry();
   if (!geometry) { return null; }
+
   const xSampleData = getSampleByName(_dotplotState.selectedX);
   const ySampleData = getSampleByName(_dotplotState.selectedY);
   if (!xSampleData || !ySampleData) { return null; }
+
   const xBlock = xSampleData.blocks.find(b => b.feature_id === featureId);
   const yBlock = ySampleData.blocks.find(b => b.feature_id === featureId);
   if (!xBlock || !yBlock) { return null; }
-  const xLeft  = mapXCoordinateToStagePx(xBlock.block_start_in_zone, xSampleData, geometry);
-  const xRight = mapXCoordinateToStagePx(xBlock.block_end_in_zone,   xSampleData, geometry);
-  // Y axis is inverted: position 1 → yZeroPixel (bottom), zone_length → yMaxPixel (top).
-  const yA     = mapYCoordinateToStagePx(yBlock.block_start_in_zone, ySampleData, geometry);
-  const yB     = mapYCoordinateToStagePx(yBlock.block_end_in_zone,   ySampleData, geometry);
+
+  const xLeft = mapXCoordinateToStagePx(xBlock.block_start_in_zone, xSampleData, geometry);
+  const xRight = mapXCoordinateToStagePx(xBlock.block_end_in_zone, xSampleData, geometry);
+
+  const yStart = mapYCoordinateToStagePx(yBlock.block_start_in_zone, ySampleData, geometry);
+  const yEnd = mapYCoordinateToStagePx(yBlock.block_end_in_zone, ySampleData, geometry);
+
+  const x0 = Math.min(xLeft, xRight);
+  const x1 = Math.max(xLeft, xRight);
+  const y0 = Math.min(yStart, yEnd);
+  const y1 = Math.max(yStart, yEnd);
+
   return {
-    x:      Math.min(xLeft,  xRight),
-    y:      Math.min(yA, yB),
-    width:  Math.max(CONFIG.dotplotIntersectionMinSizePx, Math.abs(xRight - xLeft)),
-    height: Math.max(CONFIG.dotplotIntersectionMinSizePx, Math.abs(yB - yA))
+    x: x0,
+    y: y0,
+    width: Math.max(CONFIG.dotplotIntersectionMinSizePx, x1 - x0),
+    height: Math.max(CONFIG.dotplotIntersectionMinSizePx, y1 - y0)
+  };
+}
+
+// Computes the stage-space rectangle for the block projection overlay:
+// the area on the SVG image that corresponds to the given block's coordinate
+// interval on both the selected X and Y samples.
+// Returns { x, y, width, height } in stage pixels, or null.
+function _computeDotplotBlockProjection(featureId) {
+  const geometry = computeDotplotGeometry();
+  if (!geometry) { return null; }
+
+  const xSampleData = getSampleByName(_dotplotState.selectedX);
+  const ySampleData = getSampleByName(_dotplotState.selectedY);
+  if (!xSampleData || !ySampleData) { return null; }
+
+  const xBlock = xSampleData.blocks.find(b => b.feature_id === featureId);
+  const yBlock = ySampleData.blocks.find(b => b.feature_id === featureId);
+  if (!xBlock || !yBlock) { return null; }
+
+  const xLeft = mapXCoordinateToStagePx(xBlock.block_start_in_zone, xSampleData, geometry);
+  const xRight = mapXCoordinateToStagePx(xBlock.block_end_in_zone, xSampleData, geometry);
+
+  const yStart = mapYCoordinateToStagePx(yBlock.block_start_in_zone, ySampleData, geometry);
+  const yEnd = mapYCoordinateToStagePx(yBlock.block_end_in_zone, ySampleData, geometry);
+
+  const x0 = Math.min(xLeft, xRight);
+  const x1 = Math.max(xLeft, xRight);
+  const y0 = Math.min(yStart, yEnd);
+  const y1 = Math.max(yStart, yEnd);
+
+  return {
+    vertical: {
+      x: x0,
+      y: y0,
+      width: Math.max(CONFIG.dotplotIntersectionMinSizePx, x1 - x0),
+      height: geometry.yZeroPixel - y0
+    },
+    horizontal: {
+      x: geometry.xZero,
+      y: y0,
+      width: x1 - geometry.xZero,
+      height: Math.max(CONFIG.dotplotIntersectionMinSizePx, y1 - y0)
+    }
+  };
+}
+
+
+function _computeDotplotSnpProjection(featureId) {
+  const geometry = computeDotplotGeometry();
+  if (!geometry) { return null; }
+
+  const xSampleData = getSampleByName(_dotplotState.selectedX);
+  const ySampleData = getSampleByName(_dotplotState.selectedY);
+  if (!xSampleData || !ySampleData) { return null; }
+
+  const xSnp = xSampleData.snps.find(s => s.feature_id === featureId);
+  const ySnp = ySampleData.snps.find(s => s.feature_id === featureId);
+  if (!xSnp || !ySnp) { return null; }
+
+  const x = mapXCoordinateToStagePx(xSnp.pos_in_zone, xSampleData, geometry);
+  const y = mapYCoordinateToStagePx(ySnp.pos_in_zone, ySampleData, geometry);
+
+  return {
+    x,
+    y,
+    xZero: geometry.xZero,
+    yZeroPixel: geometry.yZeroPixel
   };
 }
 
@@ -5017,11 +5211,20 @@ function updateDotplotHighlightShapes() {
   // Block intersection overlay: shown only for block features in dotplot mode.
   if (_dotplotBlockIntersectionShape) {
     if (displayed && displayed.featureType === "block") {
-      _dotplotBlockIntersectionGeom = _computeDotplotBlockIntersection(displayed.featureId);
+      _dotplotBlockIntersectionGeom = _computeDotplotBlockProjection(displayed.featureId);
     } else {
       _dotplotBlockIntersectionGeom = null;
     }
     _dotplotBlockIntersectionShape.visible(_dotplotBlockIntersectionGeom !== null);
+  }
+
+  if (_dotplotSnpProjectionShape) {
+    if (displayed && displayed.featureType === "snp") {
+      _dotplotSnpProjectionGeom = _computeDotplotSnpProjection(displayed.featureId);
+    } else {
+      _dotplotSnpProjectionGeom = null;
+    }
+    _dotplotSnpProjectionShape.visible(_dotplotSnpProjectionGeom !== null);
   }
 
   dotplotHighlightLayer.batchDraw();
@@ -5250,9 +5453,7 @@ document.getElementById("zoom-out").addEventListener("click", () => {
 });
 
 document.getElementById("zoom-reset").addEventListener("click", () => {
-  state.zoomX = getInitialZoomX();
-  state.scrollX = 0;
-  redrawStage();
+  resetActiveViewerZoom();
 });
 
 document.getElementById("dotplot-zoom-in").addEventListener("click", () => {
@@ -5266,8 +5467,7 @@ document.getElementById("dotplot-zoom-out").addEventListener("click", () => {
 });
 
 document.getElementById("dotplot-zoom-reset").addEventListener("click", () => {
-  _dotplotState.zoom = 1;
-  requestDotplotRedraw();
+  resetActiveViewerZoom();
 });
 
 function getWheelDeltaX(event) {
@@ -5329,22 +5529,62 @@ function setupWheelScrolling() {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+  const activeElement = document.activeElement;
+  const isSearchInputFocused = activeElement && activeElement.id === "search-input";
+  const key = event.key.toLowerCase();
+
+  if (isSearchInputFocused) {
     return;
   }
 
-  if (document.activeElement && document.activeElement.id === "search-input") {
+  if (key === "r") {
+    event.preventDefault();
+    resetActiveViewerZoom();
+    return;
+  }
+
+  if (key === "f") {
+    event.preventDefault();
+    centerDotplotOnPinnedFeature();
+    return;
+  }
+
+  if (event.key === "Tab") {
+    const hasPinnedFeature = Boolean(state.pinnedFeatureId && state.pinnedFeatureType);
+
+    if (!hasPinnedFeature) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (event.shiftKey) {
+      pinNeighborFeature(-1);
+    } else {
+      pinNeighborFeature(1);
+    }
+
+    return;
+  }
+
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
     return;
   }
 
   event.preventDefault();
   const direction = event.key === "ArrowLeft" ? -1 : 1;
 
+  if (isDotplotModeActive()) {
+    moveDotplotByViewportFraction(direction, 0.1);
+    return;
+  }
+
   if (state.activeKeyboardViewer === "alignment") {
     moveAlignmentByViewportFraction(direction);
-  } else {
-    moveByViewportFraction(direction, 0.1);
+    return;
   }
+
+  moveByViewportFraction(direction, 0.1);
 });
 
 document.getElementById("alignment-snp-prev").addEventListener("click", () => {

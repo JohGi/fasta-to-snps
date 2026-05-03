@@ -113,6 +113,7 @@ rule generate_region_viewer_selected_snps:
             --masked-align-dir "{ALIGN_DIR}" \
             --masked-block-n-stats "{input.n_stats_tsv}" \
             --gff-tracks-json "{input.gff_tracks_json}" \
+            --dotplot-manifest-json {input.dotplot_manifest} \
             --config-yaml "{workflow.configfiles[0]}" \
             --title "{params.title}" \
             --output "{output}" \
