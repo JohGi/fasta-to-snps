@@ -18,6 +18,28 @@ rule write_gff_tracks_json:
             json.dump(GFF_TRACKS, handle, indent=2)
             handle.write("\n")
 
+rule build_dotplot_manifest:
+    input:
+        svgs=DOTPLOT_ONLY_SVGS
+    output:
+        manifest=DOTPLOT_MANIFEST
+    benchmark:
+        BENCHMARK_DIR / "build_dotplot_manifest" / "dotplots_manifest.tsv"
+    log:
+        stdout=LOG_DIR / "build_dotplot_manifest" / "dotplots_manifest.stdout",
+        stderr=LOG_DIR / "build_dotplot_manifest" / "dotplots_manifest.stderr"
+    shell:
+        r"""
+        mkdir -p "{DOTPLOT_COMBINED_DIR}" "$(dirname "{log.stdout}")"
+
+        python3 "{SCRIPTS_DIR}/build_dotplot_manifest.py" \
+            --samples "{SAMPLES_TSV}" \
+            --svg-dir "{DOTPLOT_ONLY_SVG_DIR}" \
+            --output "{output.manifest}" \
+            1> "{log.stdout}" \
+            2> "{log.stderr}"
+        """
+
 rule generate_region_viewer:
     input:
         samples_tsv=SAMPLES_TSV,

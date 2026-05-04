@@ -323,7 +323,6 @@ SNP_DIR = OUTDIR / "07_snps"
 FILTERED_SNP_DIR = OUTDIR / "08_filtered_snps"
 SNP_POS_DIR = OUTDIR / "09_snp_positions"
 DOTPLOT_DIR = OUTDIR / "10_dotplots"
-DOTPLOT_HIGHLIGHT_DIR = DOTPLOT_DIR / "highlights"
 DOTPLOT_PAF_DIR = DOTPLOT_DIR / "paf"
 DOTPLOT_FORMATTED_DIR = DOTPLOT_DIR / "formatted"
 DOTPLOT_PDF_DIR = DOTPLOT_DIR / "pdfs"
@@ -331,6 +330,7 @@ DOTPLOT_SVG_DIR = DOTPLOT_DIR / "svgs"
 DOTPLOT_COMBINED_DIR = DOTPLOT_DIR / "combined"
 SUMMARY_STATS_DIR = OUTDIR / "11_summary_stats"
 REGION_TRACK_DIR = OUTDIR / "12_region_tracks"
+DOTPLOT_ONLY_SVG_DIR = REGION_TRACK_DIR / "dotplots"
 MASH_DISTANCES_DIR = OUTDIR / "13_mash_distances"
 BLOCK_STATS_DIR = OUTDIR / "14_block_stats"
 UNMASKED_ALIGN_DIR = BLOCK_STATS_DIR / "unmasked_alignments"
@@ -355,10 +355,6 @@ SNP_POS_LONG_TSV = SNP_POS_DIR / "snp_positions_long.tsv"
 SNP_POS_WIDE_TSV = SNP_POS_DIR / "snp_positions_wide.tsv"
 DOTPLOT_PAIRS = resolve_dotplot_pairs(SAMPLE_NAMES, config)
 DOTPLOT_PAIR_IDS = [build_pair_id(sample_a, sample_b) for sample_a, sample_b in DOTPLOT_PAIRS]
-DOTPLOT_HIGHLIGHTS = expand(
-    DOTPLOT_HIGHLIGHT_DIR / "{pair_id}.tsv",
-    pair_id=DOTPLOT_PAIR_IDS,
-)
 DOTPLOT_PAFS = expand(
     DOTPLOT_PAF_DIR / "{pair_id}.paf",
     pair_id=DOTPLOT_PAIR_IDS,
@@ -367,22 +363,22 @@ DOTPLOT_FORMATTED = expand(
     DOTPLOT_FORMATTED_DIR / "{pair_id}.tsv",
     pair_id=DOTPLOT_PAIR_IDS,
 )
-DOTPLOT_SIMPLE_PDFS = expand(
-    DOTPLOT_PDF_DIR / "{pair_id}.simple.pdf",
+# DOTPLOT_PDFS = expand(
+#     DOTPLOT_PDF_DIR / "{pair_id}.pdf",
+#     pair_id=DOTPLOT_PAIR_IDS,
+# )
+DOTPLOT_SVGS = expand(
+    DOTPLOT_SVG_DIR / "{pair_id}.svg",
     pair_id=DOTPLOT_PAIR_IDS,
 )
-DOTPLOT_HIGHLIGHT_PDFS = expand(
-    DOTPLOT_PDF_DIR / "{pair_id}.highlight_crossed.pdf",
-    pair_id=DOTPLOT_PAIR_IDS,
-)
-DOTPLOT_SIMPLE_SVGS = expand(
-    DOTPLOT_SVG_DIR / "{pair_id}.simple.svg",
+DOTPLOT_ONLY_SVGS = expand(
+    DOTPLOT_ONLY_SVG_DIR / "{pair_id}.dotplot_only.svg",
     pair_id=DOTPLOT_PAIR_IDS,
 )
 DOTPLOT_GALLERY_HTML = DOTPLOT_COMBINED_DIR / "dotplots_gallery.html"
-DOTPLOT_MANIFEST = f"{DOTPLOT_DIR}/dotplots_manifest.json"
 SUMMARY_STATS_JSON = SUMMARY_STATS_DIR / "summary_stats.json"
 SUMMARY_STATS_TXT = SUMMARY_STATS_DIR / "summary_stats.txt"
+DOTPLOT_MANIFEST = REGION_TRACK_DIR / "dotplots_manifest.json"
 REGION_TRACK_HTML = REGION_TRACK_DIR / "region_tracks.html"
 SELECTED_SNP_LONGS = expand(
     REGION_TRACK_DIR / "snp_positions_long.{marker_set}.tsv",

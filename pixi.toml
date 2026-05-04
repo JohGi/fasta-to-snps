@@ -30,8 +30,9 @@ pymupdf = ">=1.26,<2"
 
 [feature.dotplot.dependencies]
 python = "3.9.*"
-blastn2dotplots = "==1.1.2"
-numpy = ">=1.24,<2"
+matplotlib = "==3.7.3"
+pandas = "==2.0.3"
+numpy = "==1.24.4"
 perl = "*"
 minimap2 = "*"
 

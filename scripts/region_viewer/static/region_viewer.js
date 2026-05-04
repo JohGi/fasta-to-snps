@@ -76,14 +76,14 @@ const DOTPLOT_AXIS_BOUNDS = {
   // X ratios: fraction of SVG width, measured from the left (0 = left, 1 = right).
   // xZeroRatio = pixel position of genomic coordinate 1 (left end of x axis).
   // xMaxRatio  = pixel position of maximum genomic coordinate (right end of x axis).
-  xZeroRatio: 0.05,
-  xMaxRatio: 0.992,
+  xZeroRatio: 0, //0.05,
+  xMaxRatio: 1, //0.992,
   // Y ratios: measured from the BOTTOM of the SVG (0 = bottom, 1 = top).
   // yZeroRatio = position of genomic coordinate 1 (bottom of y axis).
   // yMaxRatio  = position of maximum genomic coordinate (top of y axis).
   // Conversion to CSS pixel y: pixelY = imageHeight * (1 - ratio).
-  yZeroRatio: 0.0668,
-  yMaxRatio: 0.9683
+  yZeroRatio: 0, //0.0668,
+  yMaxRatio: 1 //0.9683
 };
 
 // Set to true to draw calibration lines at axis boundaries on track canvases.
@@ -105,14 +105,19 @@ const DOTPLOT_TRACK = {
 const TRACK_FEATURE_INSET   = 1;
 const TRACK_HIGHLIGHT_INSET = 0.5;
 
-// Gap (px) between the SVG image and each external sample track.
-// Does not affect coordinate mapping inside the SVG.
-const DOTPLOT_TRACK_GAP = 6;
-
 // Dotplot zoom settings.
 const DOTPLOT_ZOOM_STEP = 1.3;
 const DOTPLOT_ZOOM_MIN  = 0.25;
 const DOTPLOT_ZOOM_MAX  = 10;
+
+const DOTPLOT_AXIS = {
+  tickLength: 5,
+  fontSize: 10,
+  labelPadding: 2,
+  color: "#444444",
+  labelColor: "#555555",
+  targetTickSpacingPx: 90
+};
 
 const state = {
   hoveredFeatureId: null,
@@ -3946,9 +3951,18 @@ function getDotplotImageDisplaySize() {
   const containerPadding = 24; // 12 px each side
   // Use full available container width minus the y-track gutter and track gap.
   const availContainerW = container ? container.clientWidth - containerPadding : 800;
-  const maxW = Math.max(100, availContainerW - DOTPLOT_TRACK.yTrackWidth - DOTPLOT_TRACK_GAP);
-  // Use 90 % of viewport height for a larger default image.
-  const maxH = Math.max(100, Math.floor(window.innerHeight * 0.9) - DOTPLOT_TRACK.xTrackHeight - DOTPLOT_TRACK_GAP);
+  
+  const reservedAxisSpace = 80;
+
+  const maxW = Math.max(
+    100,
+    availContainerW - DOTPLOT_TRACK.yTrackWidth - reservedAxisSpace
+  );
+
+  const maxH = Math.max(
+    100,
+    Math.floor(window.innerHeight * 0.9) - DOTPLOT_TRACK.xTrackHeight - reservedAxisSpace
+  );
 
   // Base size: image scaled to fit inside maxW × maxH while preserving aspect ratio.
   let w = img.naturalWidth;
@@ -4020,8 +4034,11 @@ function computeDotplotGeometry() {
   // Extra vertical space below the X zone for X-sample GFF tracks + legend.
   const xGffHeight = getDotplotXGffTotalHeight(xSampleData);
 
+  const xAxisGap = getDotplotXAxisGap();
+  const yAxisGap = getDotplotYAxisGap(ySampleData, imageHeight);
+
   // Image is offset right by the y-track width + y-GFF gutter + side gap + gap.
-  const imageX = yGffWidth + yGffSideGap + yTrackWidth + DOTPLOT_TRACK_GAP;
+  const imageX = yGffWidth + yGffSideGap + yTrackWidth + yAxisGap;
   const imageY = 0;
 
   const xZero     = imageX + imageWidth  * DOTPLOT_AXIS_BOUNDS.xZeroRatio;
@@ -4029,9 +4046,11 @@ function computeDotplotGeometry() {
   const yZeroPixel = imageY + imageHeight * (1 - DOTPLOT_AXIS_BOUNDS.yZeroRatio);
   const yMaxPixel  = imageY + imageHeight * (1 - DOTPLOT_AXIS_BOUNDS.yMaxRatio);
 
+  const stageStrokePadding = 1;
+
   return {
-    stageWidth:  yGffWidth + yGffSideGap + yTrackWidth + DOTPLOT_TRACK_GAP + imageWidth,
-    stageHeight: imageHeight + DOTPLOT_TRACK_GAP + xTrackHeight + xGffHeight,
+    stageWidth:  yGffWidth + yGffSideGap + yTrackWidth + yAxisGap + imageWidth + stageStrokePadding,
+    stageHeight: imageHeight + xAxisGap + xTrackHeight + xGffHeight + stageStrokePadding,
     imageX,
     imageY,
     imageWidth,
@@ -4042,6 +4061,8 @@ function computeDotplotGeometry() {
     xMax,
     yZeroPixel,
     yMaxPixel,
+    xAxisGap,
+    yAxisGap,
     // GFF layout helpers passed through for redrawDotplotStage.
     yGffWidth,
     yGffSideGap,
@@ -4069,6 +4090,194 @@ function mapYCoordinateToStagePx(position, sample, geometry) {
   }
   const ratio = (position - 1) / (zoneLength - 1);
   return geometry.yZeroPixel - ratio * (geometry.yZeroPixel - geometry.yMaxPixel);
+}
+
+function getAxisUnitForSpan(visibleSpan) {
+  if (visibleSpan <= CONFIG.bpToKbThresholdBp) {
+    return "bp";
+  }
+
+  if (visibleSpan <= CONFIG.kbToMbThresholdBp) {
+    return "kb";
+  }
+
+  return "Mb";
+}
+
+function formatAxisValueForSpan(value, visibleSpan) {
+  const unit = getAxisUnitForSpan(visibleSpan);
+
+  if (unit === "bp") {
+    return `${formatNumber(value, 0)} bp`;
+  }
+
+  if (unit === "kb") {
+    return `${formatNumber(value / 1000, 1)} kb`;
+  }
+
+  return `${formatNumber(value / 1000000, 3)} Mb`;
+}
+
+function getDotplotAxisTickValues(sample, pixelSpan) {
+  if (!sample) {
+    return [];
+  }
+
+  const visibleStart = 1;
+  const visibleEnd = sample.zone_length;
+  const visibleSpan = Math.max(1, visibleEnd - visibleStart + 1);
+  const bpPerPixel = visibleSpan / Math.max(1, pixelSpan);
+  const rawStep = bpPerPixel * DOTPLOT_AXIS.targetTickSpacingPx;
+  const step = niceStep(rawStep);
+  const firstTick = Math.ceil(visibleStart / step) * step;
+  const values = [];
+
+  for (let value = firstTick; value <= visibleEnd; value += step) {
+    values.push(value);
+  }
+
+  return values;
+}
+
+
+function estimateDotplotAxisLabelWidth(sample, pixelSpan) {
+  if (!sample) {
+    return 0;
+  }
+
+  const visibleSpan = Math.max(1, sample.zone_length);
+  const tickValues = getDotplotAxisTickValues(sample, pixelSpan);
+
+  if (tickValues.length === 0) {
+    return 0;
+  }
+
+  return Math.max(
+    ...tickValues.map(value =>
+      estimateTextWidth(
+        formatAxisValueForSpan(value, visibleSpan),
+        DOTPLOT_AXIS.fontSize
+      )
+    )
+  );
+}
+
+
+function getDotplotXAxisGap() {
+  return Math.ceil(
+    DOTPLOT_AXIS.tickLength
+    + DOTPLOT_AXIS.labelPadding
+    + DOTPLOT_AXIS.fontSize
+    + 8
+  );
+}
+
+
+function getDotplotYAxisGap(ySampleData, imageHeight) {
+  const labelWidth = estimateDotplotAxisLabelWidth(ySampleData, imageHeight);
+
+  return Math.ceil(
+    labelWidth
+    + DOTPLOT_AXIS.tickLength
+    + DOTPLOT_AXIS.labelPadding
+    + 10
+  );
+}
+
+function drawDotplotXAxis(layer, geometry, sample) {
+  if (!sample) {
+    return;
+  }
+
+  const axisY = geometry.imageHeight + 1;
+  const visibleStart = 1;
+  const visibleEnd = sample.zone_length;
+  const visibleSpan = Math.max(1, visibleEnd - visibleStart + 1);
+
+  const bpPerPixel = visibleSpan / Math.max(1, geometry.xMax - geometry.xZero);
+  const rawStep = bpPerPixel * DOTPLOT_AXIS.targetTickSpacingPx;
+  const step = niceStep(rawStep);
+  const firstTick = Math.ceil(visibleStart / step) * step;
+
+  layer.add(new Konva.Line({
+    points: [geometry.xZero, axisY, geometry.xMax, axisY],
+    stroke: DOTPLOT_AXIS.color,
+    strokeWidth: 1,
+    listening: false
+  }));
+
+  for (let value = firstTick; value <= visibleEnd; value += step) {
+    const x = mapXCoordinateToStagePx(value, sample, geometry);
+
+    layer.add(new Konva.Line({
+      points: [x, axisY, x, axisY + DOTPLOT_AXIS.tickLength],
+      stroke: DOTPLOT_AXIS.color,
+      strokeWidth: 1,
+      listening: false
+    }));
+
+    layer.add(new Konva.Text({
+      x: x - 34,
+      y: axisY + DOTPLOT_AXIS.tickLength + DOTPLOT_AXIS.labelPadding,
+      width: 68,
+      text: formatAxisValueForSpan(value, visibleSpan),
+      fontSize: DOTPLOT_AXIS.fontSize,
+      fill: DOTPLOT_AXIS.labelColor,
+      align: "center",
+      listening: false
+    }));
+  }
+}
+
+function drawDotplotYAxis(layer, geometry, sample) {
+  if (!sample) {
+    return;
+  }
+
+  const axisX = geometry.imageX - 1;
+  const visibleStart = 1;
+  const visibleEnd = sample.zone_length;
+  const visibleSpan = Math.max(1, visibleEnd - visibleStart + 1);
+
+  const axisHeight = Math.max(1, geometry.yZeroPixel - geometry.yMaxPixel);
+  const bpPerPixel = visibleSpan / axisHeight;
+  const rawStep = bpPerPixel * DOTPLOT_AXIS.targetTickSpacingPx;
+  const step = niceStep(rawStep);
+  const firstTick = Math.ceil(visibleStart / step) * step;
+
+  layer.add(new Konva.Line({
+    points: [axisX, geometry.yZeroPixel, axisX, geometry.yMaxPixel],
+    stroke: DOTPLOT_AXIS.color,
+    strokeWidth: 1,
+    listening: false
+  }));
+
+  for (let value = firstTick; value <= visibleEnd; value += step) {
+    const y = mapYCoordinateToStagePx(value, sample, geometry);
+
+    layer.add(new Konva.Line({
+      points: [axisX - DOTPLOT_AXIS.tickLength, y, axisX, y],
+      stroke: DOTPLOT_AXIS.color,
+      strokeWidth: 1,
+      listening: false
+    }));
+
+    layer.add(new Konva.Text({
+      x: axisX - DOTPLOT_AXIS.tickLength - 70,
+      y: y - DOTPLOT_AXIS.fontSize / 2,
+      width: 66,
+      text: formatAxisValueForSpan(value, visibleSpan),
+      fontSize: DOTPLOT_AXIS.fontSize,
+      fill: DOTPLOT_AXIS.labelColor,
+      align: "right",
+      listening: false
+    }));
+  }
+}
+
+function drawDotplotCoordinateAxes(layer, geometry, xSampleData, ySampleData) {
+  drawDotplotXAxis(layer, geometry, xSampleData);
+  drawDotplotYAxis(layer, geometry, ySampleData);
 }
 
 // Returns true when dotplot mode is the active viewer mode.
@@ -4317,6 +4526,7 @@ function redrawDotplotStage() {
   const xSampleData = getSampleByName(_dotplotState.selectedX);
   const ySampleData = getSampleByName(_dotplotState.selectedY);
 
+
   // ── Image layer ────────────────────────────────────────────────────────────
   dotplotImageLayer.destroyChildren();
   dotplotImageLayer.add(new Konva.Image({
@@ -4331,12 +4541,14 @@ function redrawDotplotStage() {
   // ── Track layer ────────────────────────────────────────────────────────────
   dotplotTrackLayer.destroyChildren();
 
+  drawDotplotCoordinateAxes(dotplotTrackLayer, geometry, xSampleData, ySampleData);
+
   // Zone bounds: the outer DOTPLOT_TRACK width/height = CONFIG.trackHeight + 2
   // accommodates the 1 px zone border on each side (TRACK_FEATURE_INSET).
   // The inner zone (xZoneH = CONFIG.trackHeight) matches the browser-mode white track rect.
   // DOTPLOT_TRACK_GAP separates the SVG image from each track zone.
   const xZoneX = geometry.xZero;
-  const xZoneY = geometry.imageHeight + DOTPLOT_TRACK_GAP + TRACK_FEATURE_INSET;
+  const xZoneY = geometry.imageHeight + geometry.xAxisGap + TRACK_FEATURE_INSET;
   const xZoneW = Math.max(1, geometry.xMax - geometry.xZero);
   const xZoneH = CONFIG.trackHeight;
 
