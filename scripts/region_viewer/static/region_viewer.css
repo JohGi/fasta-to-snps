@@ -117,6 +117,15 @@ body {
   align-items: center;
   gap: 8px;
 }
+
+.viewer-toolbar-group.has-separator::before {
+  content: "";
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin-right: 10px;
+}
+
 .viewer-toolbar button {
   min-width: 36px;
   padding: 5px 9px;
@@ -622,50 +631,122 @@ body {
   gap: 8px;
 }
 
-.dotplot-select-label {
-  font-size: 13px;
+.dotplot-layout {
+  width: 100%;
+  min-width: 0;
+}
+
+.dotplot-main-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dotplot-x-axis-labels {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dotplot-y-axis-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  align-self: stretch;
+}
+
+.dotplot-sample-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
   white-space: nowrap;
 }
 
-.dotplot-select {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  font-size: 13px;
+.dotplot-y-axis-labels .dotplot-sample-label {
+  writing-mode: vertical-rl;
+  width: 30px;
+  height: 76px;
+  min-width: 30px;
+  padding: 9px 0;
+}
+
+.dotplot-sample-label:hover {
+  background: #f0f4fa;
+  border-color: #a0b4cc;
+}
+
+.dotplot-sample-label.active-x,
+.dotplot-sample-label.active-y {
+  background: #374151;
+  border-color: #374151;
+  color: white;
+}
+
+.dotplot-sample-label.active-x:hover,
+.dotplot-sample-label.active-y:hover {
+  background: #1f2937;
+  border-color: #1f2937;
+  color: white;
+}
+
+.dotplot-sample-label.pending {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.dotplot-sample-label.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dotplot-sample-label.disabled:hover {
   background: white;
-  color: var(--text);
-  cursor: pointer;
-  min-width: 130px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border-color: var(--border);
 }
 
-.dotplot-select:focus {
-  outline: none;
-  border-color: #2f5f95;
-  box-shadow: 0 0 0 2px rgba(47, 95, 149, 0.15);
-}
-
-/* Content area wrapping the Konva stage.
-   Horizontal overflow scrolls inside the panel.
-   Vertical centering is handled by window scroll, not panel scroll,
-   so overflow-y is hidden. Centering modifier applied by JS. */
 .dotplot-content {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: white;
   min-height: 60px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  max-height: 95vh;
+  overflow: auto;
   display: flex;
   align-items: flex-start;
 }
 
-/* Applied by JS when stageWidth <= available container width. */
+
 .dotplot-content--centered {
   justify-content: center;
+}
+
+.dotplot-stage-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: max-content;
+  max-width: none;
+}
+
+.dotplot-stage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Hidden img element used only to load the SVG file.
@@ -732,4 +813,9 @@ body {
 .dotplot-zoom-group button:hover {
   background: #f0f4fa;
   border-color: #a0b4cc;
+}
+
+.dotplot-content.is-pending-pair #dotplot-viewer {
+  opacity: 0.45;
+  filter: grayscale(1);
 }

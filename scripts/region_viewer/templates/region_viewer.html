@@ -24,22 +24,25 @@
         </section>
 
         <div class="viewer-panel">
-          <!-- Row 1: mode buttons, left-aligned -->
           <div class="viewer-panel-topbar">
             <button id="browser-mode-btn" class="mode-btn active" type="button">Browser</button>
             <button id="dotplot-mode-btn" class="mode-btn" type="button">Dotplot</button>
           </div>
 
-          <!-- Row 2: mode-specific controls, centered -->
           <div class="viewer-toolbar">
-            <div class="viewer-toolbar-group">
-              <button id="feature-prev" class="feature-nav-button hidden" type="button">Previous</button>
-              <button id="feature-next" class="feature-nav-button hidden" type="button">Next</button>
+            <div id="feature-nav-group" class="viewer-toolbar-group hidden">
+              <button id="feature-prev" class="feature-nav-button" type="button">Previous</button>
+              <button id="feature-next" class="feature-nav-button" type="button">Next</button>
+              <button id="feature-center" class="feature-nav-button" type="button">Center</button>
             </div>
-            <div class="viewer-toolbar-group">
+
+            <div id="viewer-zoom-group" class="viewer-toolbar-group">
               <button id="zoom-out" type="button">−</button>
               <button id="zoom-in" type="button">+</button>
               <button id="zoom-reset" type="button">Reset</button>
+            </div>
+
+            <div class="viewer-toolbar-group has-separator">
               <button id="search-toggle" type="button">Search</button>
             </div>
             <div id="search-row" class="viewer-toolbar-row hidden">
@@ -54,41 +57,29 @@
               <span id="search-status" class="search-status" aria-live="polite"></span>
             </div>
           </div>
-          <div id="dotplot-controls-row" class="dotplot-controls hidden">
-            <div class="dotplot-control-group dotplot-nav-group">
-              <button id="dotplot-feature-prev" class="dotplot-feature-nav-button hidden" type="button">Previous</button>
-              <button id="dotplot-feature-next" class="dotplot-feature-nav-button hidden" type="button">Next</button>
-              <button id="dotplot-center-feature" class="dotplot-feature-nav-button hidden" type="button">Center</button>
-            </div>
-            <div class="dotplot-control-group">
-              <label class="dotplot-select-label" for="dotplot-y-select">Y sample</label>
-              <select id="dotplot-y-select" class="dotplot-select" aria-label="Y sample"></select>
-            </div>
-            <div class="dotplot-control-group">
-              <label class="dotplot-select-label" for="dotplot-x-select">X sample</label>
-              <select id="dotplot-x-select" class="dotplot-select" aria-label="X sample"></select>
-            </div>
-            <div class="dotplot-control-group dotplot-zoom-group">
-              <button id="dotplot-zoom-out" type="button" title="Zoom out">−</button>
-              <button id="dotplot-zoom-in" type="button" title="Zoom in">+</button>
-              <button id="dotplot-zoom-reset" type="button">Reset</button>
-            </div>
-          </div>
 
-          <!-- Row 3: content area -->
           <div class="viewer-wrapper">
             <div id="viewer" class="viewer" tabindex="0"></div>
           </div>
-          <div id="dotplot-panel" class="dotplot-content hidden">
-            <p id="dotplot-status-msg" class="hint dotplot-status-msg hidden"></p>
-            <!-- Hidden loader img: source for Konva.Image; naturalWidth/Height used for sizing. -->
-            <img id="dotplot-svg-img" class="dotplot-svg-loader" src="" alt="" aria-hidden="true" />
-            <!-- Konva stage container; width/height set by JS to match image + track gutters. -->
-            <div id="dotplot-viewer" class="dotplot-viewer hidden"></div>
+
+          <div id="dotplot-panel" class="dotplot-layout hidden">
+            <div class="dotplot-content">
+              <div class="dotplot-stage-layout">
+                <div id="dotplot-x-labels" class="dotplot-x-axis-labels"></div>
+
+                <div class="dotplot-stage-row">
+                  <div id="dotplot-viewer" class="dotplot-viewer hidden"></div>
+                  <div id="dotplot-y-labels" class="dotplot-y-axis-labels"></div>
+                </div>
+
+                <p id="dotplot-status-msg" class="hint dotplot-status-msg hidden"></p>
+                <img id="dotplot-svg-img" class="dotplot-svg-loader" src="" alt="" aria-hidden="true" />
+              </div>
+            </div>
           </div>
         </div>
 
-                <section id="alignment-panel" class="alignment-panel hidden">
+        <section id="alignment-panel" class="alignment-panel hidden">
           <div class="alignment-header">
             <div>
               <h2>
@@ -115,6 +106,7 @@
       </div>
 
       <div id="column-resizer" class="column-resizer" aria-label="Resize sidebar"></div>
+
       <div class="right-column" id="right-column">
         <aside id="analysis-settings-sidebar" class="sidebar-panel">
           <div class="sidebar-header">
@@ -122,6 +114,7 @@
           </div>
           <div id="analysis-settings-content"></div>
         </aside>
+
         <aside id="sidebar" class="sidebar-panel sidebar">
           <div class="sidebar-header">
             <h2>Region overview</h2>
@@ -131,6 +124,7 @@
       </div>
     </div>
   </div>
+
   <div id="floating-tooltip" class="floating-tooltip"></div>
 
   <script>

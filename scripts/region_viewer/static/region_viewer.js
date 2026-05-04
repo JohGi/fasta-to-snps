@@ -183,7 +183,15 @@ const lastSidebarRenderState = {
 const _dotplotState = {
   selectedY: null,
   selectedX: null,
+  pendingAxis: null,
   zoom: 1
+};
+
+const dotplotPairIndexes = {
+  validPairsByY: new Map(),
+  validPairsByX: new Map(),
+  pairByYX: new Map(),
+  samples: []
 };
 
 // Dotplot Konva stage and layers — initialized lazily on first dotplot activation.
@@ -985,23 +993,27 @@ function attachSidebarUnpinHandler() {
 
 function updateFeatureNavigationButtons() {
   const hasPinnedFeature = Boolean(state.pinnedFeatureId && state.pinnedFeatureType);
-  const dotplotActive = isDotplotModeActive();
 
-  for (const [prevId, nextId] of [
-    ["feature-prev",         "feature-next"],
-    ["dotplot-feature-prev", "dotplot-feature-next"]
-  ]) {
-    const prevBtn = document.getElementById(prevId);
-    const nextBtn = document.getElementById(nextId);
-    if (!prevBtn || !nextBtn) { continue; }
+  const navGroup = document.getElementById("feature-nav-group");
+  const prevBtn = document.getElementById("feature-prev");
+  const nextBtn = document.getElementById("feature-next");
+  const centerBtn = document.getElementById("feature-center");
+  const zoomGroup = document.getElementById("viewer-zoom-group");
+
+  if (navGroup) {
+    navGroup.classList.toggle("hidden", !hasPinnedFeature);
+  }
+  if (prevBtn) {
     prevBtn.classList.toggle("hidden", !hasPinnedFeature);
+  }
+  if (nextBtn) {
     nextBtn.classList.toggle("hidden", !hasPinnedFeature);
   }
-
-  // Center button: only relevant in dotplot mode.
-  const centerBtn = document.getElementById("dotplot-center-feature");
   if (centerBtn) {
-    centerBtn.classList.toggle("hidden", !(hasPinnedFeature && dotplotActive));
+    centerBtn.classList.toggle("hidden", !hasPinnedFeature);
+  }
+  if (zoomGroup) {
+    zoomGroup.classList.toggle("has-separator", hasPinnedFeature);
   }
 }
 
@@ -3858,6 +3870,36 @@ function getDotplotPairs() {
   return (REGION_DATA.dotplots && REGION_DATA.dotplots.pairs) || [];
 }
 
+function buildDotplotPairIndexes() {
+  dotplotPairIndexes.validPairsByY.clear();
+  dotplotPairIndexes.validPairsByX.clear();
+  dotplotPairIndexes.pairByYX.clear();
+
+  const samples = new Set();
+
+  for (const pair of getDotplotPairs()) {
+    const ySample = pair.y_sample;
+    const xSample = pair.x_sample;
+
+    samples.add(ySample);
+    samples.add(xSample);
+
+    if (!dotplotPairIndexes.validPairsByY.has(ySample)) {
+      dotplotPairIndexes.validPairsByY.set(ySample, new Set());
+    }
+    dotplotPairIndexes.validPairsByY.get(ySample).add(xSample);
+
+    if (!dotplotPairIndexes.validPairsByX.has(xSample)) {
+      dotplotPairIndexes.validPairsByX.set(xSample, new Set());
+    }
+    dotplotPairIndexes.validPairsByX.get(xSample).add(ySample);
+
+    dotplotPairIndexes.pairByYX.set(`${ySample}::${xSample}`, pair);
+  }
+
+  dotplotPairIndexes.samples = [...samples].sort();
+}
+
 function getDotplotYSamples() {
   const seen = new Set();
   const result = [];
@@ -3877,9 +3919,11 @@ function getDotplotXSamplesForY(ySample) {
 }
 
 function findDotplotPair(ySample, xSample) {
-  return getDotplotPairs().find(
-    pair => pair.y_sample === ySample && pair.x_sample === xSample
-  ) || null;
+  if (!ySample || !xSample) {
+    return null;
+  }
+
+  return dotplotPairIndexes.pairByYX.get(`${ySample}::${xSample}`) || null;
 }
 
 function getSelectedDotplotPair() {
@@ -3940,7 +3984,10 @@ function getDotplotYGffTotalWidth(ySampleData) {
 // including topGap and an optional legend row.
 function getDotplotXGffTotalHeight(xSampleData) {
   const trackCount = xSampleData ? getSampleGffTracks(xSampleData).length : 0;
-  const legendH = getAllGffTrackNames().length > 0 ? GFF_LEGEND.height : 0;
+  const legendTopGap = getAllGffTrackNames().length > 0 ? 20 : 0;
+  const legendH = getAllGffTrackNames().length > 0
+    ? legendTopGap + GFF_LEGEND.height
+    : 0;
   if (trackCount === 0 && legendH === 0) { return 0; }
   return (trackCount > 0 ? GFF_TRACK.topGap + trackCount * (GFF_TRACK.height + GFF_TRACK.gap) : 0)
     + legendH;
@@ -4597,8 +4644,7 @@ function redrawDotplotStage() {
     const trackNames = getAllGffTrackNames();
     if (trackNames.length > 0) {
       // Legend baseline Y: bottom of the x-GFF track area.
-      const legendY = geometry.stageHeight - (getAllGffTrackNames().length > 0 ? GFF_LEGEND.height : 0)
-        + GFF_LEGEND.topPadding;
+      const legendY = geometry.stageHeight - GFF_LEGEND.height + GFF_LEGEND.topPadding;
       let legendX = geometry.xZero;
       for (const trackName of trackNames) {
         const color = getGffTrackColor(trackName);
@@ -4714,9 +4760,25 @@ function redrawDotplotStage() {
   }
   dotplotStage.draw();
 
+  updateDotplotAxisLabelLayout(geometry);
   // Toggle centering based on whether the stage fits the scroll container.
   // Must run after draw() so the container has its final dimensions.
   _updateDotplotScrollAlignment(geometry);
+}
+
+function updateDotplotAxisLabelLayout(geometry) {
+  const xLabels = document.getElementById("dotplot-x-labels");
+  const yLabels = document.getElementById("dotplot-y-labels");
+
+  if (xLabels) {
+    xLabels.style.width = `${geometry.imageWidth}px`;
+    xLabels.style.marginLeft = `${geometry.imageX}px`;
+  }
+
+  if (yLabels) {
+    yLabels.style.height = `${geometry.imageHeight}px`;
+    yLabels.style.marginTop = `${geometry.imageY}px`;
+  }
 }
 
 // Centers the dotplot stage when it fits the scroll container; left-aligns
@@ -5056,27 +5118,54 @@ function centerDotplotOnPinnedFeature() {
   // Step 5 — apply scroll in the next frame so the browser has committed the
   // new canvas dimensions.
   requestAnimationFrame(() => {
-    // Horizontal: scroll .dotplot-content so rect center is centred in the panel.
     const rectCenterX = rect.x + rect.width / 2;
+    const rectCenterY = rect.y + rect.height / 2;
+
     container.scrollLeft = clampValue(
       rectCenterX - container.clientWidth / 2,
       0,
       container.scrollWidth - container.clientWidth
     );
 
-    // Vertical: scroll the window so rect center is centred in the browser viewport.
-    const stageEl  = document.getElementById("dotplot-viewer");
-    if (stageEl) {
-      const stageRect        = stageEl.getBoundingClientRect();
-      const rectCenterYInPage = window.scrollY + stageRect.top + rect.y + rect.height / 2;
-      const targetWindowScrollY = rectCenterYInPage - window.innerHeight / 2;
-      window.scrollTo({
-        top: clampValue(targetWindowScrollY, 0, document.documentElement.scrollHeight - window.innerHeight),
-        behavior: "smooth"
-      });
-      showToast("R: reset zoom · F: center · Tab/Shift+Tab: navigate");
-    }
+    container.scrollTop = clampValue(
+      rectCenterY - container.clientHeight / 2,
+      0,
+      container.scrollHeight - container.clientHeight
+    );
+
+    const containerRect = container.getBoundingClientRect();
+    const containerCenterYInPage = window.scrollY + containerRect.top + containerRect.height / 2;
+    const targetWindowScrollY = containerCenterYInPage - window.innerHeight / 2;
+
+    window.scrollTo({
+      top: clampValue(
+        targetWindowScrollY,
+        0,
+        document.documentElement.scrollHeight - window.innerHeight
+      ),
+      behavior: "smooth"
+    });
+
+    showToast("R: reset zoom · F: center · Tab/Shift+Tab: navigate");
   });
+}
+
+function centerPinnedFeature() {
+  if (!state.pinnedFeatureId || !state.pinnedFeatureType) {
+    return;
+  }
+
+  if (isDotplotModeActive()) {
+    centerDotplotOnPinnedFeature();
+    return;
+  }
+
+  const range = searchIndexes.featureIdToZoneRange.get(state.pinnedFeatureId);
+  if (!range) {
+    return;
+  }
+
+  centerRegionOnRange(range.start, range.end);
 }
 
 function _computeDotplotBlockIntersection(featureId) {
@@ -5230,113 +5319,240 @@ function updateDotplotHighlightShapes() {
   dotplotHighlightLayer.batchDraw();
 }
 
-function populateDotplotXSelect(ySample) {
-  const xSelect = document.getElementById("dotplot-x-select");
-  if (!xSelect) {
-    return;
-  }
-  xSelect.innerHTML = "";
-  const xSamples = getDotplotXSamplesForY(ySample);
-  for (const xSample of xSamples) {
-    const option = document.createElement("option");
-    option.value = xSample;
-    option.textContent = xSample;
-    xSelect.appendChild(option);
-  }
-  _dotplotState.selectedX = xSamples.length > 0 ? xSamples[0] : null;
-  if (_dotplotState.selectedX !== null) {
-    xSelect.value = _dotplotState.selectedX;
-  }
-}
-
 function renderDotplot() {
   const img = document.getElementById("dotplot-svg-img");
-  const msg = document.getElementById("dotplot-status-msg");
 
-  if (!img || !msg) {
+  if (!img) {
     return;
   }
-
-  // Mark hover index dirty whenever pair selection changes.
-  _dotplotHoverIndexDirty = true;
-  _lastResolvedDotplotHoverKey = null;
 
   const pair = findDotplotPair(_dotplotState.selectedY, _dotplotState.selectedX);
 
-  if (pair) {
-    img.onload = requestDotplotRedraw;
-    img.src = pair.svg_rel_path;
-    msg.textContent = "";
-    msg.classList.add("hidden");
-    // Handle browser-cached images that won't fire onload again.
-    if (img.complete && img.naturalWidth > 0) {
-      requestDotplotRedraw();
-    }
-  } else {
-    img.onload = null;
-    img.src = "";
-    clearDotplotStage();
-    msg.textContent = "No dotplot available for this combination.";
-    msg.classList.remove("hidden");
+  if (!pair) {
+    updateDotplotStatusMessage("Select a compatible X/Y sample.");
+    return;
   }
+
+  _dotplotHoverIndexDirty = true;
+  _lastResolvedDotplotHoverKey = null;
+
+  img.onload = requestDotplotRedraw;
+  img.src = pair.svg_rel_path;
+
+  updateDotplotStatusMessage("");
+
+  if (img.complete && img.naturalWidth > 0) {
+    requestDotplotRedraw();
+  }
+}
+
+function isCompleteValidDotplotPair() {
+  return Boolean(findDotplotPair(_dotplotState.selectedY, _dotplotState.selectedX));
+}
+
+function getCompatibleDotplotXSamples(ySample) {
+  return dotplotPairIndexes.validPairsByY.get(ySample) || new Set();
+}
+
+function getCompatibleDotplotYSamples(xSample) {
+  return dotplotPairIndexes.validPairsByX.get(xSample) || new Set();
+}
+
+function getDotplotLabelState(axis, sampleName) {
+  const isX = axis === "x";
+  const selectedValue = isX ? _dotplotState.selectedX : _dotplotState.selectedY;
+  const oppositeValue = isX ? _dotplotState.selectedY : _dotplotState.selectedX;
+
+  const isSelected = selectedValue === sampleName;
+  const isPending = _dotplotState.pendingAxis === axis && isSelected;
+
+  if (isPending) {
+    return { enabled: true, className: "pending" };
+  }
+
+  if (isCompleteValidDotplotPair()) {
+    return {
+      enabled: true,
+      className: isSelected ? `active-${axis}` : ""
+    };
+  }
+
+  if (_dotplotState.pendingAxis === "x" && !isX) {
+    const compatibleY = getCompatibleDotplotYSamples(_dotplotState.selectedX);
+    const enabled = compatibleY.has(sampleName);
+    return { enabled, className: enabled ? "" : "disabled" };
+  }
+
+  if (_dotplotState.pendingAxis === "y" && isX) {
+    const compatibleX = getCompatibleDotplotXSamples(_dotplotState.selectedY);
+    const enabled = compatibleX.has(sampleName);
+    return { enabled, className: enabled ? "" : "disabled" };
+  }
+
+  return {
+    enabled: true,
+    className: isSelected ? `active-${axis}` : ""
+  };
+}
+
+function createDotplotSampleLabel(axis, sampleName) {
+  const labelState = getDotplotLabelState(axis, sampleName);
+  const button = document.createElement("button");
+
+  button.type = "button";
+  button.textContent = sampleName;
+  button.dataset.axis = axis;
+  button.dataset.sample = sampleName;
+  button.className = `dotplot-sample-label ${labelState.className}`.trim();
+  button.disabled = !labelState.enabled;
+
+  button.addEventListener("click", () => {
+    handleDotplotSampleLabelClick(axis, sampleName);
+  });
+
+  return button;
+}
+
+function renderDotplotSampleLabels() {
+  const xContainer = document.getElementById("dotplot-x-labels");
+  const yContainer = document.getElementById("dotplot-y-labels");
+
+  if (!xContainer || !yContainer) {
+    return;
+  }
+
+  xContainer.innerHTML = "";
+  yContainer.innerHTML = "";
+
+  for (const sampleName of dotplotPairIndexes.samples) {
+    xContainer.appendChild(createDotplotSampleLabel("x", sampleName));
+    yContainer.appendChild(createDotplotSampleLabel("y", sampleName));
+  }
+}
+
+function handleDotplotSampleLabelClick(axis, sampleName) {
+  if (axis === "x") {
+    handleDotplotXLabelClick(sampleName);
+  } else {
+    handleDotplotYLabelClick(sampleName);
+  }
+
+  renderDotplotSampleLabels();
+  updateDotplotPendingPairVisualState();
+}
+
+function handleDotplotXLabelClick(sampleName) {
+  if (isCompleteValidDotplotPair() && _dotplotState.selectedX === sampleName) {
+    return;
+  }
+
+  if (_dotplotState.selectedY === null) {
+    _dotplotState.selectedX = sampleName;
+    _dotplotState.pendingAxis = "x";
+    updateDotplotStatusMessage("Select a compatible Y sample.");
+    return;
+  }
+
+  if (_dotplotState.pendingAxis === "y") {
+    const pair = findDotplotPair(_dotplotState.selectedY, sampleName);
+    if (!pair) {
+      return;
+    }
+
+    _dotplotState.selectedX = sampleName;
+    _dotplotState.pendingAxis = null;
+    loadSelectedDotplotPair();
+    return;
+  }
+
+  _dotplotState.selectedX = sampleName;
+  _dotplotState.selectedY = null;
+  _dotplotState.pendingAxis = "x";
+  updateDotplotStatusMessage("Select a compatible Y sample.");
+}
+
+function handleDotplotYLabelClick(sampleName) {
+  if (isCompleteValidDotplotPair() && _dotplotState.selectedY === sampleName) {
+    return;
+  }
+
+  if (_dotplotState.selectedX === null) {
+    _dotplotState.selectedY = sampleName;
+    _dotplotState.pendingAxis = "y";
+    updateDotplotStatusMessage("Select a compatible X sample.");
+    return;
+  }
+
+  if (_dotplotState.pendingAxis === "x") {
+    const pair = findDotplotPair(sampleName, _dotplotState.selectedX);
+    if (!pair) {
+      return;
+    }
+
+    _dotplotState.selectedY = sampleName;
+    _dotplotState.pendingAxis = null;
+    loadSelectedDotplotPair();
+    return;
+  }
+
+  _dotplotState.selectedY = sampleName;
+  _dotplotState.selectedX = null;
+  _dotplotState.pendingAxis = "y";
+  updateDotplotStatusMessage("Select a compatible X sample.");
+}
+
+function updateDotplotStatusMessage(message) {
+  const msg = document.getElementById("dotplot-status-msg");
+  if (!msg) {
+    return;
+  }
+
+  msg.textContent = message;
+  msg.classList.toggle("hidden", message === "");
+}
+
+function updateDotplotPendingPairVisualState() {
+  const container = document.querySelector(".dotplot-content");
+  if (!container) {
+    return;
+  }
+
+  container.classList.toggle(
+    "is-pending-pair",
+    !isCompleteValidDotplotPair()
+  );
+}
+
+function loadSelectedDotplotPair() {
+  _dotplotState.zoom = 1;
+  updateDotplotPendingPairVisualState();
+  renderDotplot();
 }
 
 function setupDotplotUI() {
   const pairs = getDotplotPairs();
   const controls = document.querySelector(".dotplot-controls");
-  const msg = document.getElementById("dotplot-status-msg");
-  const ySelect = document.getElementById("dotplot-y-select");
-  const xSelect = document.getElementById("dotplot-x-select");
 
   if (pairs.length === 0) {
     if (controls) {
       controls.classList.add("hidden");
     }
-    if (msg) {
-      msg.textContent = "No dotplots are available.";
-      msg.classList.remove("hidden");
-    }
+    updateDotplotStatusMessage("No dotplots are available.");
     return;
   }
 
-  if (!ySelect || !xSelect) {
-    return;
-  }
+  const firstPair = pairs[0];
+  _dotplotState.selectedY = firstPair.y_sample;
+  _dotplotState.selectedX = firstPair.x_sample;
+  _dotplotState.pendingAxis = null;
 
-  const ySamples = getDotplotYSamples();
-  for (const ySample of ySamples) {
-    const option = document.createElement("option");
-    option.value = ySample;
-    option.textContent = ySample;
-    ySelect.appendChild(option);
-  }
-
-  if (ySamples.length > 0) {
-    _dotplotState.selectedY = ySamples[0];
-    ySelect.value = _dotplotState.selectedY;
-    populateDotplotXSelect(_dotplotState.selectedY);
-  }
-
-  ySelect.addEventListener("change", () => {
-    _dotplotState.selectedY = ySelect.value;
-    _dotplotState.zoom = 1;
-    populateDotplotXSelect(_dotplotState.selectedY);
-    renderDotplot();
-  });
-
-  xSelect.addEventListener("change", () => {
-    _dotplotState.selectedX = xSelect.value;
-    _dotplotState.zoom = 1;
-    renderDotplot();
-  });
-
+  renderDotplotSampleLabels();
   renderDotplot();
 }
 
 function setViewerMode(mode) {
   const viewerCanvas       = document.getElementById("viewer");
   const viewerToolbar      = document.querySelector(".viewer-toolbar");
-  const dotplotControlsRow = document.getElementById("dotplot-controls-row");
   const alignmentPanel     = document.getElementById("alignment-panel");
   const dotplotPanel       = document.getElementById("dotplot-panel");
   const browserBtn         = document.getElementById("browser-mode-btn");
@@ -5346,15 +5562,6 @@ function setViewerMode(mode) {
 
   if (viewerCanvas) {
     viewerCanvas.classList.toggle("hidden", !isBrowser);
-  }
-  if (viewerToolbar) {
-    viewerToolbar.classList.toggle("hidden", !isBrowser);
-  }
-  if (dotplotControlsRow) {
-    dotplotControlsRow.classList.toggle("hidden", isBrowser);
-  }
-  if (alignmentPanel && !isBrowser) {
-    alignmentPanel.classList.add("hidden");
   }
   if (dotplotPanel) {
     dotplotPanel.classList.toggle("hidden", isBrowser);
@@ -5372,7 +5579,9 @@ function setViewerMode(mode) {
   } else {
     // Give the panel time to become visible before computing image dimensions.
     requestDotplotRedraw();
+    requestActiveAlignmentViewerUpdate();
   }
+  updateFeatureNavigationButtons();
   syncSidebarHeightToViewerColumn();
 }
 
@@ -5402,6 +5611,7 @@ state.scrollX = 0;
 setupColumnResizer();
 setupSearchUI();
 setupModeSwitch();
+buildDotplotPairIndexes();
 setupDotplotUI();
 setupWheelScrolling();
 showRenderingOverlay();
@@ -5430,24 +5640,28 @@ document.getElementById("feature-next").addEventListener("click", () => {
   pinNeighborFeature(1);
 });
 
-document.getElementById("dotplot-feature-prev").addEventListener("click", () => {
-  pinNeighborFeature(-1);
-});
-
-document.getElementById("dotplot-feature-next").addEventListener("click", () => {
-  pinNeighborFeature(1);
-});
-
-document.getElementById("dotplot-center-feature").addEventListener("click", () => {
-  centerDotplotOnPinnedFeature();
+document.getElementById("feature-center").addEventListener("click", () => {
+  centerPinnedFeature();
 });
 
 document.getElementById("zoom-in").addEventListener("click", () => {
+  if (isDotplotModeActive()) {
+    _dotplotState.zoom = Math.min(DOTPLOT_ZOOM_MAX, _dotplotState.zoom * DOTPLOT_ZOOM_STEP);
+    requestDotplotRedraw();
+    return;
+  }
+
   zoomAroundViewportCenter(state.zoomX * getZoomFactor());
   redrawStage();
 });
 
 document.getElementById("zoom-out").addEventListener("click", () => {
+  if (isDotplotModeActive()) {
+    _dotplotState.zoom = Math.max(DOTPLOT_ZOOM_MIN, _dotplotState.zoom / DOTPLOT_ZOOM_STEP);
+    requestDotplotRedraw();
+    return;
+  }
+
   zoomAroundViewportCenter(state.zoomX / getZoomFactor());
   redrawStage();
 });
@@ -5456,19 +5670,6 @@ document.getElementById("zoom-reset").addEventListener("click", () => {
   resetActiveViewerZoom();
 });
 
-document.getElementById("dotplot-zoom-in").addEventListener("click", () => {
-  _dotplotState.zoom = Math.min(DOTPLOT_ZOOM_MAX, _dotplotState.zoom * DOTPLOT_ZOOM_STEP);
-  requestDotplotRedraw();
-});
-
-document.getElementById("dotplot-zoom-out").addEventListener("click", () => {
-  _dotplotState.zoom = Math.max(DOTPLOT_ZOOM_MIN, _dotplotState.zoom / DOTPLOT_ZOOM_STEP);
-  requestDotplotRedraw();
-});
-
-document.getElementById("dotplot-zoom-reset").addEventListener("click", () => {
-  resetActiveViewerZoom();
-});
 
 function getWheelDeltaX(event) {
   if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
@@ -5537,7 +5738,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (key === "r") {
+  if (key === "r" && !event.ctrlKey && !event.metaKey) {
     event.preventDefault();
     resetActiveViewerZoom();
     return;
@@ -5545,7 +5746,7 @@ window.addEventListener("keydown", (event) => {
 
   if (key === "f") {
     event.preventDefault();
-    centerDotplotOnPinnedFeature();
+    centerPinnedFeature();
     return;
   }
 
