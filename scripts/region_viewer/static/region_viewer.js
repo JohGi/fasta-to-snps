@@ -583,6 +583,37 @@ function renderInfoTooltip(text) {
   return `<span class="info-tooltip" data-tooltip="${escapeHtml(text)}">Info</span>`;
 }
 
+const VIEWER_MODE_INFO_TOOLTIPS = {
+  browser: [
+    "This view shows locally collinear blocks retained across samples in gray, and SNPs retained after filtering in red.",
+    "",
+    "Locally collinear blocks were first identified across the input samples with SibeliaZ, then filtered to retain blocks that were present exactly once in each sample, had consistent strand orientation, and passed the configured minimum block length.",
+    "",
+    "For each retained block, sequences were extracted, hard-masked with RepeatMasker, and aligned with MAFFT. Biallelic SNPs were then called from the masked block alignments with SeqTUI, using the configured minimum flank length, i.e., the minimum number of perfectly aligned bases required on both sides of each SNP, with no indel, additional SNP, or N. Depending on the analysis configuration, the displayed SNPs may also have been further restricted to a marker subset or to group-discriminant variants.",
+    "",
+    "References: SibeliaZ, Minkin & Medvedev 2020; RepeatMasker, Tarailo-Graovac & Chen 2009; MAFFT, Katoh & Standley 2013; SeqTUI, Ranwez 2026."
+  ].join("\n"),
+
+  dotplot: [
+    "This view shows pairwise dotplots between available sample pairs.",
+    "",
+    "For each selected pair, the corresponding sequences were first aligned with Minimap2 (-x asm5), then visualized as a pairwise dotplot with blastn2dotplots.",
+    "",
+    "References: Minimap2, Li 2018; blastn2dotplots, Okuno et al. 2025."
+  ].join("\n")
+};
+
+
+function updateViewerModeInfoTooltip(mode) {
+  const infoTooltip = document.getElementById("viewer-mode-info-tooltip");
+
+  if (!infoTooltip) {
+    return;
+  }
+
+  infoTooltip.dataset.tooltip = VIEWER_MODE_INFO_TOOLTIPS[mode] || "";
+}
+
 function renderDistanceMatrix(matrix) {
   if (!matrix || !matrix.labels || !matrix.values) {
     return `
@@ -2163,25 +2194,12 @@ function requestActiveAlignmentViewerUpdate() {
 }
 
 function showRenderingOverlay() {
-  let overlay = document.getElementById("rendering-overlay");
+  const overlay = document.getElementById("rendering-overlay");
+
   if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "rendering-overlay";
-    overlay.textContent = "Rendering viewer\u2026";
-    overlay.style.cssText = [
-      "position:fixed",
-      "inset:0",
-      "display:flex",
-      "align-items:center",
-      "justify-content:center",
-      "background:rgba(255,255,255,0.85)",
-      "font-size:16px",
-      "color:#374151",
-      "z-index:9999",
-      "pointer-events:none"
-    ].join(";");
-    document.body.appendChild(overlay);
+    return;
   }
+
   overlay.style.display = "flex";
 }
 
@@ -5771,6 +5789,8 @@ function setViewerMode(mode) {
   const dotplotBtn         = document.getElementById("dotplot-mode-btn");
 
   const isBrowser = mode === "browser";
+  
+  updateViewerModeInfoTooltip(mode);
 
   if (viewerCanvas) {
     viewerCanvas.classList.toggle("hidden", !isBrowser);
@@ -5813,27 +5833,37 @@ function setupModeSwitch() {
   }
 }
 
-state.featureGroups = buildFeatureGroups(REGION_DATA);
-initDerivedData();
-buildSearchIndexes();
-renderAnalysisSettings();
-renderSidebarDefault();
-state.zoomX = getInitialZoomX();
-state.scrollX = 0;
-setupColumnResizer();
-setupSearchUI();
-setupModeSwitch();
-buildDotplotPairIndexes();
-setupDotplotUI();
-setupWheelScrolling();
-showRenderingOverlay();
-requestAnimationFrame(() => {
+function initializeViewer() {
+  state.featureGroups = buildFeatureGroups(REGION_DATA);
+  initDerivedData();
+  buildSearchIndexes();
+  renderAnalysisSettings();
+  renderSidebarDefault();
+
+  state.zoomX = getInitialZoomX();
+  state.scrollX = 0;
+
+  setupColumnResizer();
+  setupSearchUI();
+  setupModeSwitch();
+  updateViewerModeInfoTooltip("browser");
+  buildDotplotPairIndexes();
+  setupDotplotUI();
+  setupWheelScrolling();
+
+  redrawStage();
+  redrawAlignmentViewer();
+  syncSidebarHeightToViewerColumn();
+
   requestAnimationFrame(() => {
-    redrawStage();
-    redrawAlignmentViewer();
-    syncSidebarHeightToViewerColumn();
     hideRenderingOverlay();
   });
+}
+
+showRenderingOverlay();
+
+requestAnimationFrame(() => {
+  initializeViewer();
 });
 
 window.addEventListener("resize", () => {

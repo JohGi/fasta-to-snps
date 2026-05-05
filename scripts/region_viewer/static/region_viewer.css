@@ -22,6 +22,58 @@ body {
   background: var(--bg);
 }
 
+.rendering-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(1px);
+  color: #374151;
+  pointer-events: none;
+}
+
+.rendering-card {
+  min-width: 260px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 22px 26px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
+  text-align: center;
+}
+
+.rendering-message {
+  font-size: 17px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.rendering-submessage {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rendering-spinner {
+  width: 26px;
+  height: 26px;
+  margin: 0 auto 14px auto;
+  border: 3px solid #e5e7eb;
+  border-top-color: #6b7280;
+  border-radius: 999px;
+  animation: rendering-spin 900ms linear infinite;
+}
+
+@keyframes rendering-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -87,10 +139,21 @@ body {
   overflow: hidden;
 }
 
-/* Top bar: mode buttons left-aligned. */
 .viewer-panel-topbar {
   display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.viewer-panel-topbar-left {
+  display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.viewer-panel-topbar-right {
+  margin-left: auto;
+  display: flex;
   align-items: center;
 }
 

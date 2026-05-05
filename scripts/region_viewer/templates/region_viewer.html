@@ -10,6 +10,13 @@
   </style>
 </head>
 <body>
+  <div id="rendering-overlay" class="rendering-overlay">
+    <div class="rendering-card">
+      <div class="rendering-spinner" aria-hidden="true"></div>
+      <div class="rendering-message">Rendering viewer…</div>
+      <div class="rendering-submessage">Large regions can take a few seconds to load.</div>
+    </div>
+  </div>
   <div class="app">
     <div class="content-row" id="content-row">
       <div class="viewer-column" id="viewer-column">
@@ -25,8 +32,23 @@
 
         <div class="viewer-panel">
           <div class="viewer-panel-topbar">
-            <button id="browser-mode-btn" class="mode-btn active" type="button">Browser</button>
-            <button id="dotplot-mode-btn" class="mode-btn" type="button">Dotplot</button>
+            <div class="viewer-panel-topbar-left">
+              <button id="browser-mode-btn" class="mode-btn active" type="button">Browser</button>
+              <button id="dotplot-mode-btn" class="mode-btn" type="button">Dotplot</button>
+            </div>
+
+            <div class="viewer-panel-topbar-right">
+              <span
+                id="viewer-mode-info-tooltip"
+                class="info-tooltip"
+                data-tooltip=""
+                tabindex="0"
+                role="note"
+                aria-label="Viewer mode information"
+              >
+                Info
+              </span>
+            </div>
           </div>
 
           <div class="viewer-toolbar">
